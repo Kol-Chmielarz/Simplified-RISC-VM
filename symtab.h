@@ -1,65 +1,48 @@
-/* $Id: symtab.h,v 1.4 2023/11/01 13:20:24 leavens Exp $ */
+/* $Id: symtab.h,v 1.2 2023/09/14 21:19:33 leavens Exp $ */
 #ifndef _SYMTAB_H
 #define _SYMTAB_H
 
-#include "scope.h"
-#include "id_use.h"
+#include <stdbool.h>
+#include "id_attrs.h"
 
-// Maximum number of declarations that can be stored in a scope
-#define MAX_NESTING 100
+// Maximum number of names/attributes that can be stored in a symboltable
+#define MAX_SYMTAB_SIZE 1024
 
 // initialize the symbol table
 extern void symtab_initialize();
 
-// Return the number of scopes currently in the symbol table.
+// Return the number of mappings in this symbol table
 extern unsigned int symtab_size();
 
-// Does this symbol table have any scopes in it?
+// Is this symbol table empty? (I.e., does it have not mappings?)
 extern bool symtab_empty();
 
-// Return the current scope's next location count (of variables).
-extern unsigned int symtab_scope_loc_count();
-
-// Return the current scope's size (the number of declared ids).
-extern unsigned int symtab_scope_size();
-
-// Is the current scope full?
-extern bool symtab_scope_full();
-
-// Return the current nesting level of the symbol table
-// (this is the number of symtab_enter_scope() calls
-// minus the number of symtab_leave_scope() calls
-extern unsigned int symtab_current_nesting_level();
-
-// Is the symbol table itself full
-// (i.e., is symtab_current_nesting_level() equal to MAX_NESTING-1)?
+// Is this symbol table full? (I.e., can it not hold more mappings?)
+// (i.e., is symtab_size() equal to MAX_SYMTAB_SIZE-1)?
 extern bool symtab_full();
 
 // Is the given name associated with some attributes?
-// (this looks back through all scopes).
 extern bool symtab_defined(const char *name);
 
-// Is the given name associated with some attributes in the current scope?
-// (this only looks in the current scope).
-extern bool symtab_defined_in_current_scope(const char *name);
+// Requires: !symtab_defined(name) && attrs != NULL
+// Remember the given attributes (i.e., an association from attrs->name
+// to the other parts of *attrs)
+extern void symtab_insert(id_attrs attrs);
 
-// Requires: !symtab_defined_in_current_scope(name) && attrs != NULL
-// Modify the current scope (as recorded in the symbol table) to
-// add an association from the given name to the given attributes, attrs.
-extern void symtab_insert(const char *name, id_attrs *attrs);
+// Return a pointer to the attributes of the given name
+// or NULL if there is no association for that name.
+extern id_attrs *symtab_lookup(const char *name);
 
-// Requires: !symtab_full()
-// Start a new scope (for a procedure)
-extern void symtab_enter_scope();
+// Start an iteration by returning the first name in the symbol table,
+// return NULL if symtab_empty()
+extern const char *symtab_first_name();
 
-// Requires: !symtab_empty()
-extern void symtab_leave_scope();
+// Are there more names defined in the symbol table after the given one?
+// This returns false if name is NULL.
+extern bool symtab_more_after(const char *name);
 
-// Return (a pointer to) a struct containing:
-// the attributes of the given name (attrs)
-// and the number of lexical levels outward
-// from the current scope at which the name was declared,
-// or NULL if there is no association for name.
-extern id_use *symtab_lookup(const char *name);
-
+// Requires: symtab_more_after(name);
+// Return the next name defined in the symbol table after the given one,
+// but return NULL if there are no more names
+extern const char *symtab_next_name(const char *name);
 #endif

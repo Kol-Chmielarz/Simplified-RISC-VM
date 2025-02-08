@@ -1,4 +1,4 @@
-// $Id: instruction.h,v 1.2 2023/11/13 05:13:52 leavens Exp $
+// $Id: instruction.h,v 1.17 2023/09/18 02:24:31 leavens Exp $
 #ifndef _INSTRUCTION_H
 #define _INSTRUCTION_H
 #include <stdio.h>
@@ -10,24 +10,20 @@
 typedef enum {REG_O = 0, ADDI_O = 9, ANDI_O = 12, BORI_O = 13, XORI_O = 14,
 	      BEQ_O = 4, BGEZ_O = 1, BGTZ_O = 7, BLEZ_O = 6, BLTZ_O = 8,
 	      BNE_O = 5, LBU_O = 36, LW_O = 35, SB_O = 40, SW_O = 43,
-	      JMP_O = 2, JAL_O = 3
-} op_code;
+	      JMP_O = 2, JAL_O = 3} op_code;
 
 // function codes in binary instructions for the SRM (when opcode is 0)
-typedef enum {ADD_F = 33, SUB_F = 35, MUL_F = 25, DIV_F = 27, 
-	      MFHI_F = 16, MFLO_F = 18, AND_F = 36, BOR_F = 37,
-	      NOR_F = 39, XOR_F = 38, SLL_F = 0, SRL_F = 3,
-	      JR_F = 8, SYSCALL_F = 12
-} func_code;
+typedef enum {ADD_F = 33, SUB_F = 35, MUL_F = 25, DIV_F = 27,
+    MFHI_F = 16, MFLO_F = 18, AND_F = 36, BOR_F = 37, NOR_F = 39, XOR_F = 38,
+    SLL_F = 0, SRL_F = 3, JR_F = 8, SYSCALL_F = 12} func_code;
 
 // instruction types
 typedef enum {reg_instr_type, syscall_instr_type, immed_instr_type,
     jump_instr_type, error_instr_type} instr_type;
 
 // system calls
-typedef enum {exit_sc = 10, print_str_sc = 4, print_int_sc = 5,
-	      print_char_sc = 11, read_char_sc = 12, 
-	      start_tracing_sc = 256, stop_tracing_sc = 257
+typedef enum {exit_sc = 10, print_str_sc = 4, print_char_sc = 11,
+	      read_char_sc = 12, start_tracing_sc = 256, stop_tracing_sc = 257
 } syscall_type;
 
 // register/computational type instructions, except system calls
@@ -82,11 +78,6 @@ extern instr_type instruction_type(bin_instr_t i);
 // Read a single instruction (in binary) from bf and return it,
 // but exit with an error if there is a problem.
 extern bin_instr_t instruction_read(BOFFILE bf);
-
-// Requires: bof is open for writing in binary
-// Write the given instruction, instr, to bf in binary,
-// but exit with an error if there is a problem.
-extern void instruction_write_bin_instr(BOFFILE bf, bin_instr_t instr);
 
 // Requires: bof is open for writing in binary
 // Write the register instruction ri to bf in binary,

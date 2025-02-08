@@ -1,4 +1,4 @@
-// $Id: regname.c,v 1.1 2023/11/13 05:14:01 leavens Exp $
+// $Id: regname.c,v 1.1 2023/09/15 15:08:01 leavens Exp $
 #include "regname.h"
 
 static const char *regnames[NUM_REGISTERS] = {

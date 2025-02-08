@@ -1,6 +1,5 @@
-/* $Id: ast.c,v 1.18 2023/10/19 06:14:57 leavens Exp $ */
+/* $Id: ast.c,v 1.21 2023/09/17 20:47:27 leavens Exp $ */
 #include <string.h>
-#include <assert.h>
 #include <stdlib.h>
 #include "utilities.h"
 #include "ast.h"
@@ -37,595 +36,311 @@ AST *ast_heap_copy(AST t) {
     return ret;
 }
 
-// Return an AST for a block which contains the given ASTs.
-block_t ast_block(const_decls_t const_decls, var_decls_t var_decls,
-		  proc_decls_t proc_decls, stmt_t stmt)
+// Return an AST for a program,
+// which contains the given ASTs.
+program_t ast_program(text_section_t textSec, data_section_t dataSec, stack_section_t stackSec)
 {
-    block_t ret;
-    ret.file_loc = const_decls.file_loc;
-    ret.type_tag = block_ast;
-    ret.const_decls = const_decls;
-    ret.var_decls = var_decls;
-    ret.proc_decls = proc_decls;
-    ret.stmt = stmt;
+    program_t ret;
+    ret.file_loc = textSec.file_loc;
+    ret.type_tag = program_ast;
+    ret.textSection = textSec;
+    ret.dataSection = dataSec;
+    ret.stackSection = stackSec;
     return ret;
 }
 
-// Return an AST for an empty const decls
-extern const_decls_t ast_const_decls_empty(empty_t empty)
+// Return an AST for the text section
+// with the given entry point and instructions.
+text_section_t ast_text_section(token_t tok, lora_t entryPoint,
+				asm_instrs_t instrs)
 {
-    const_decls_t ret;
-    ret.file_loc = empty.file_loc;
-    ret.type_tag = const_decls_ast;
-    ret.const_decls = NULL;
+    text_section_t ret;
+    ret.file_loc = file_location_copy(tok.file_loc);
+    ret.type_tag = text_section_ast;
+    ret.entryPoint = entryPoint;
+    ret.instrs = instrs;
+    return ret;
+}
+
+// Return an AST for an entry point
+// that represents the label given
+lora_t ast_lora_label(ident_t label)
+{
+    lora_t ret;
+    ret.file_loc = file_location_copy(label.file_loc);
+    ret.type_tag = lora_ast;
+    ret.address_defined = false;
+    ret.label = label.name;
+    ret.addr = 0;
+    return ret;
+}
+
+// Return an AST for an entry point
+// that represents the address given
+lora_t ast_lora_addr(unsignednum_t addr)
+{
+    lora_t ret;
+    ret.file_loc = file_location_copy(addr.file_loc);
+    ret.type_tag = lora_ast;
+    ret.address_defined = true;
+    ret.label = NULL;
+    ret.addr = addr.value;
     return ret;
 }
 
 
-// Return an AST for the const decls
-const_decls_t ast_const_decls(const_decls_t const_decls,
-			      const_decl_t const_decl)
+// Return an AST for an asm instr AST
+// with the given label-opt and instruction
+asm_instr_t ast_asm_instr(label_opt_t labelOpt, instr_t instr)
 {
-    const_decls_t ret = const_decls;
-    // make a copy of const_decl on the heap
-    const_decl_t *p = (const_decl_t *) malloc(sizeof(const_decl_t));
-    if (p == NULL) {
-	bail_with_error("Cannot allocate space for %s!", "const_decl_t");
-    }
-    *p = const_decl;
-    p->next = NULL;
-    const_decl_t *last = ast_last_list_elem(ret.const_decls);
-    if (last == NULL) {
-	ret.const_decls = p;
-    } else {
-	last->next = p;
-    }
-    return ret;
-}
-
-
-
-// Return an AST for a const_decl
-const_decl_t ast_const_decl(const_defs_t const_defs)
-{
-    const_decl_t ret;
-    ret.file_loc = const_defs.file_loc;
-    ret.type_tag = const_def_ast;
-    ret.const_defs = const_defs;
+    asm_instr_t ret;
+    ret.file_loc = labelOpt.file_loc;
+    ret.type_tag = asm_instr_ast;
     ret.next = NULL;
+    ret.label_opt = labelOpt;
+    ret.instr = instr;
     return ret;
 }
 
-// Return an AST for const_defs
-extern const_defs_t ast_const_defs_singleton(const_def_t const_def)
+// Return an AST for a singleton asm instrs AST
+// with the given instruction
+asm_instrs_t ast_asm_instrs_singleton(asm_instr_t asminstr)
 {
-    const_defs_t ret;
-    ret.file_loc = const_def.file_loc;
-    ret.type_tag = const_defs_ast;
-    const_def_t *p = (const_def_t *) malloc(sizeof(const_def_t));
-    if (p == NULL) {							
-	bail_with_error("Unable to allocate space for a %s!", "const_def_t"); 
-    }		    
-    *p = const_def;		
-    p->next = NULL;    
-    ret.const_defs = p;							
-    return ret;
-}
-
-// Return an AST for const_defs
-extern const_defs_t ast_const_defs(const_defs_t const_defs,
-				   const_def_t const_def)
-{
-    const_defs_t ret = const_defs;
-    // make a copy of const_def on the heap
-    const_def_t *p = (const_def_t *) malloc(sizeof(const_def_t));
+    asm_instrs_t ret;
+    ret.file_loc = asminstr.file_loc;
+    ret.type_tag = asm_instrs_ast;
+    asm_instr_t *p = (asm_instr_t *)malloc(sizeof(asm_instr_t));
     if (p == NULL) {
-	bail_with_error("Cannot allocate space for %s!", "const_def_t");
+	bail_with_error("Cannot allocate space for an asm_instr!");
     }
-    *p = const_def;
+    *p = asminstr;
     p->next = NULL;
-    const_def_t *last = ast_last_list_elem(ret.const_defs);
-    if (last == NULL) {
-	ret.const_defs = p;
-    } else {
-	last->next = p;
-    }
+    ret.instrs = p;
     return ret;
 }
 
-// Return an AST for a const-def
-const_def_t ast_const_def(ident_t ident, number_t number)
+// Return an AST made from adding instr to the end of lst
+asm_instrs_t ast_asm_instrs_add(asm_instrs_t lst, asm_instr_t asminstr)
 {
-    const_def_t ret;
-    ret.file_loc = file_location_copy(ident.file_loc);
-    assert((ret.file_loc)->filename != NULL);
-    ret.type_tag = const_def_ast;
-    ret.next = NULL;
-    ret.ident = ident;
-    ret.number = number;
-    return ret;
-}
-
-
-// Return an AST for varDecls that are empty
-var_decls_t ast_var_decls_empty(empty_t empty)
-{
-    var_decls_t ret;
-    ret.file_loc = empty.file_loc;
-    ret.type_tag = var_decls_ast;
-    ret.var_decls = NULL;
-    return ret;
-}
-
-// Return an AST varDecls that have a var_decl
-var_decls_t ast_var_decls(var_decls_t var_decls, var_decl_t var_decl)
-{
-    var_decls_t ret = var_decls;
-    // make a copy of var_decl on the heap
-    var_decl_t *p = (var_decl_t *) malloc(sizeof(var_decl_t));
+    asm_instrs_t ret = lst;
+    asm_instr_t *p = (asm_instr_t *)malloc(sizeof(asm_instr_t));
     if (p == NULL) {
-	bail_with_error("Cannot allocate space for %s!", "var_decl_t");
+	bail_with_error("Cannot allocate space for an asm_instr!");
     }
-    *p = var_decl;
+    *p = asminstr;
     p->next = NULL;
-    var_decl_t *last = ast_last_list_elem(ret.var_decls);
+    // splice p onto the end of lst.instrs
+    asm_instr_t *last = ast_last_list_elem(lst.instrs);
     if (last == NULL) {
-	ret.var_decls = p;
+	ret.instrs = p;
     } else {
 	last->next = p;
     }
     return ret;
 }
 
-// Return an AST for a var_decl
-var_decl_t ast_var_decl(idents_t idents)
+// Return an AST for a label_opt AST
+// with the given identifier
+label_opt_t ast_label_opt_label(ident_t id)
 {
-    var_decl_t ret;
-    ret.file_loc = idents.file_loc;
-    ret.type_tag = var_decl_ast;
-    ret.next = NULL;
-    ret.idents = idents;
+    label_opt_t ret;
+    ret.file_loc = file_location_copy(id.file_loc);
+    ret.type_tag = label_opt_ast;
+    ret.name = id.name;
     return ret;
 }
 
-// Return an AST made for one ident
-extern idents_t ast_idents_singleton(ident_t ident)
+// Return an AST for a label_opt AST
+// with the empty AST (t)
+label_opt_t ast_label_opt_empty(empty_t t)
 {
-    idents_t ret;
-    ret.file_loc = ident.file_loc;
-    ret.type_tag = idents_ast;
-    // make a copy of ident on the heap
-    ident_t *p = (ident_t *) malloc(sizeof(ident_t));	
-    if (p == NULL) {							
-	bail_with_error("Unable to allocate space for a %s!", "ident_t"); 
-    }		    
-    *p = ident;		
-    p->next = NULL;    
-    ret.idents = p;						
+    label_opt_t ret;
+    ret.file_loc = file_location_copy(t.file_loc);
+    ret.type_tag = label_opt_ast;
+    ret.name = NULL;
     return ret;
 }
 
-// Return an AST made for idents
-extern idents_t ast_idents(idents_t idents, ident_t ident)
-{
-    idents_t ret = idents;
-    // make a copy of ident on the heap
-    ident_t *p = (ident_t *) malloc(sizeof(ident_t));
-    if (p == NULL) {
-	bail_with_error("Cannot allocate space for %s!", "ident_t");
-    }
-    *p = ident;
-    p->next = NULL;
-    ident_t *last = ast_last_list_elem(ret.idents);
-    if (last == NULL) {
-	ret.idents = p;
-    } else {
-	last->next = p;
-    }
+// Return an immediate data holding an int
+immedData_t ast_immed_number(int n) {
+    immedData_t ret;
+    ret.id_data_kind = id_number;
+    ret.data.immed = n;
     return ret;
 }
 
-// Return an AST for proc_decls
-proc_decls_t ast_proc_decls_empty(empty_t empty)
-{
-    proc_decls_t ret;
-    ret.file_loc = empty.file_loc;
-    ret.type_tag = proc_decls_ast;
-    ret.proc_decls = NULL;
+// Return an immediate data holding an unsigned int
+immedData_t ast_immed_unsigned(unsigned int u) {
+    immedData_t ret;
+    ret.id_data_kind = id_unsigned;
+    ret.data.uimmed = u;
     return ret;
 }
 
-// Return an AST for proc_decls
-proc_decls_t ast_proc_decls(proc_decls_t proc_decls,
-			    proc_decl_t proc_decl)
-{
-    proc_decls_t ret = proc_decls;
-    // make a copy of proc_decl on the heap
-    proc_decl_t *p = (proc_decl_t *) malloc(sizeof(proc_decl_t));	
-    if (p == NULL) {							
-	bail_with_error("Unable to allocate space for a %s!", "proc_decl_t"); 
-    }		    
-    *p = proc_decl;		
-    p->next = NULL;    
-    proc_decl_t *last = ast_last_list_elem(ret.proc_decls);
-    if (last == NULL) {
-	ret.proc_decls = p;
-    } else {
-	last->next = p;
-    }
-    return ret;
-}
-
-// Return an AST for a proc_decl
-proc_decl_t ast_proc_decl(ident_t ident, block_t block)
-{
-    proc_decl_t ret;
-    ret.file_loc = file_location_copy(ident.file_loc);
-    ret.type_tag = proc_decl_ast;
-    ret.next = NULL;
-    ret.name = ident.name;
-    block_t *p = (block_t *) malloc(sizeof(block_t));
-    if (p == NULL) {
-	bail_with_error("Unable to allocate space for a %s!", "block_t");
-    }
-    *p = block;
-    ret.block = p;
-    return ret;
-}
-
-// Return an AST for a skip statement
-skip_stmt_t ast_skip_stmt(file_location *file_loc) {
-    skip_stmt_t ret;
-    ret.file_loc = file_loc;
-    ret.type_tag = skip_stmt_ast;
-    return ret;
-}
-
-// Return an AST for a write statement
-write_stmt_t ast_write_stmt(expr_t expr) {
-    write_stmt_t ret;
-    ret.file_loc = expr.file_loc;
-    ret.type_tag = write_stmt_ast;
-    ret.expr = expr;
-    return ret;
-}
-
-// Return an AST for a read statement
-read_stmt_t ast_read_stmt(ident_t ident) {
-    read_stmt_t ret;
-    ret.file_loc = file_location_copy(ident.file_loc);
-    ret.type_tag = read_stmt_ast;
-    ret.name = ident.name;
+// Return an immediate data that is nothing
+immedData_t ast_immed_none() {
+    immedData_t ret;
+    ret.id_data_kind = id_empty;
+    ret.data.none = 0;
     return ret;
 }
 
 // Return an immediate data holding an address
-while_stmt_t ast_while_stmt(condition_t condition, stmt_t body) {
-    while_stmt_t ret;
-    ret.file_loc = condition.file_loc;
-    ret.type_tag = while_stmt_ast;
-    ret.condition = condition;
-    stmt_t *p = (stmt_t *) malloc(sizeof(stmt_t));
-    if (p == NULL) {
-	bail_with_error("Unable to allocate space for a %s!", "stmt_t"); 
-    }
-    *p = body;		
-    ret.body = p;					
+immedData_t ast_immed_lora(lora_t a) {
+    immedData_t ret;
+    ret.id_data_kind = id_lora;
+    ret.data.lora = a;
     return ret;
 }
 
 // Return an AST for an instruction
 // with the given information
-if_stmt_t ast_if_stmt(condition_t condition, stmt_t then_stmt,
-		      stmt_t else_stmt)
+extern instr_t ast_instr(token_t op, instr_type itype,
+			 unsigned short num_regs_used,
+			 unsigned short reg1, unsigned short reg2,
+			 unsigned short reg3, func_type func,
+			 immed_kind_t ik, immedData_t im)
 {
-    if_stmt_t ret;
-    ret.file_loc = condition.file_loc;
-    ret.type_tag = if_stmt_ast;
-    ret.condition = condition;
-    // copy then_stmt to the heap
-    stmt_t *p = (stmt_t *) malloc(sizeof(stmt_t));			
-    if (p == NULL) {							
-	bail_with_error("Unable to allocate space for a %s!", "stmt_t"); 
-    }									
-    *p = then_stmt;	
-    ret.then_stmt = p;						
-    // copy else_stmt to the heap
-    p = (stmt_t *) malloc(sizeof(stmt_t));	
-    if (p == NULL) {							
-	bail_with_error("Unable to allocate space for a %s!", "stmt_t"); 
-    }		    
-    *p = else_stmt;		
-    ret.else_stmt = p;						
+    instr_t ret;
+    ret.file_loc = file_location_copy(op.file_loc);
+    ret.type_tag = instr_ast;
+    ret.itype = itype;
+    ret.opcode = lexer_token2opcode(op.code);
+    ret.opname = op.text;
+    ret.func = func;
+    ret.regs_used = num_regs_used;
+    ret.regs[0] = reg1;
+    ret.regs[1] = reg2;
+    ret.regs[2] = reg3;
+    ret.immed_kind = ik;
+    ret.immed_data = im;
     return ret;
 }
 
-// Return an AST for a begin statement
-// containing the given list of statements
-begin_stmt_t ast_begin_stmt(stmts_t stmts)
+// Return an AST for the data section AST
+// with the given list of static declarations.
+data_section_t ast_data_section(token_t kw, unsigned int static_start,
+				static_decls_t staticDecls)
 {
-    begin_stmt_t ret;
-    ret.file_loc = stmts.file_loc;
-    ret.type_tag = begin_stmt_ast;
-    ret.stmts = stmts;
+    data_section_t ret;
+    ret.file_loc = file_location_copy(kw.file_loc);
+    ret.type_tag = data_section_ast;
+    ret.static_start_addr = static_start;
+    ret.staticDecls = staticDecls;
     return ret;
 }
 
-// Return an AST for a call statment
- call_stmt_t ast_call_stmt(ident_t ident)
+// Return an AST for an empty list of static decls
+static_decls_t ast_static_decls_empty(empty_t e)
 {
-    call_stmt_t ret;
-    ret.file_loc = file_location_copy(ident.file_loc);
-    ret.type_tag = call_stmt_ast;
-    ret.name = ident.name;
+    static_decls_t ret;
+    ret.file_loc = file_location_copy(e.file_loc);
+    ret.type_tag = static_decls_ast;
+    ret.decls = NULL;
     return ret;
 }
 
-// Return an AST for an assignment statement
-assign_stmt_t ast_assign_stmt(ident_t ident, expr_t expr)
+// Return an AST for a list of static declarations
+// with sd added to the end of sds
+static_decls_t ast_static_decls_add(static_decls_t sds,
+				    static_decl_t sd)
 {
-    assign_stmt_t ret;
-    ret.file_loc = file_location_copy(ident.file_loc);
-    ret.type_tag = assign_stmt_ast;
-    ret.name = ident.name;
-    assert(ret.name != NULL);
-    expr_t *p = (expr_t *) malloc(sizeof(expr_t));
+    static_decls_t ret = sds;
+    static_decl_t *p = (static_decl_t *)malloc(sizeof(static_decl_t));
     if (p == NULL) {
-	bail_with_error("Unable to allocate space for a %s!", "expr_t");
+	bail_with_error("Cannot allocate space for a static_decl!");
     }
-    *p = expr;
-    ret.expr = p;
-    assert(ret.expr != NULL);
-    return ret;
-}
-
-// Return an AST for the list of statements 
-stmts_t ast_stmts_singleton(stmt_t stmt) {
-    // debug_print("Entering ast_stmts_singleton\n");
-    stmts_t ret;
-    ret.file_loc = stmt.file_loc;
-    ret.type_tag = stmts_ast;
-    stmt.next = NULL;
-    // copy stmt to the heap
-    stmt_t *p = (stmt_t *) malloc(sizeof(stmt_t));	
-    if (p == NULL) {							
-	bail_with_error("Unable to allocate space for a %s!", "stmt_t"); 
-    }		    
-    *p = stmt;
+    *p = sd;
     p->next = NULL;
-    // there will be no statments in front of stmt in the list
-    ret.stmts = p;					
-    return ret;
-}
-
-// Return an AST for the list of statements 
-stmts_t ast_stmts(stmts_t stmts, stmt_t stmt) {
-    // debug_print("Entering ast_stmts...\n");
-    stmts_t ret = stmts;
-    // copy stmt to the heap
-    stmt_t *s = (stmt_t *) malloc(sizeof(stmt_t));
-    if (s == NULL) {
-	bail_with_error("Cannot allocate space for %s!", "stmt_t");
+    // splice p onto the end of sds.decls
+    static_decl_t *last = ast_last_list_elem(sds.decls);
+    if (last == NULL) {
+	ret.decls = p;
+    } else {
+	last->next = p;
     }
-    *s = stmt;
-    s->next = NULL;
-    stmt_t *last = ast_last_list_elem(ret.stmts);
-    assert(last != NULL); // because there are no empty lists of stmts
-    last->next = s;
     return ret;
 }
 
-// Return an AST for the given statment
-stmt_t ast_stmt_assign(assign_stmt_t s)
+// Return an AST for a data size delclarator
+// for the given number of bytes
+data_size_t ast_data_size(token_t kw, unsigned short bytes)
 {
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.next = NULL;
-    ret.stmt_kind = assign_stmt;
-    ret.data.assign_stmt = s;
+    // duplicated from string.h to suppress a (silly) warning
+    extern char *strdup(const char *s);
+    data_size_t ret;
+    ret.file_loc = file_location_copy(kw.file_loc);
+    ret.type_tag = data_size_ast;
+    ret.size_in_bytes = bytes;
+    ret.size_name = strdup(kw.text);
     return ret;
 }
 
-// Return an AST for the given statment
-stmt_t ast_stmt_call(call_stmt_t s)
+// Return an AST for a static declaration
+// found in the file named fn, on line ln, with the given data size,
+// identifier, and initializer.
+static_decl_t ast_static_decl(data_size_t ds,
+			      ident_t ident,
+			      initializer_t initializer)
 {
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.next = NULL;
-    ret.stmt_kind = call_stmt;
-    ret.data.call_stmt = s;
-    return ret;
-}
-
-// Return an AST for the given statment
-stmt_t ast_stmt_begin(begin_stmt_t s)
-{
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.next = NULL;
-    ret.stmt_kind = begin_stmt;
-    ret.data.begin_stmt = s;
-    return ret;
-}
-
-// Return an AST for the given statment
-stmt_t ast_stmt_if(if_stmt_t s)
-{
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.next = NULL;
-    ret.stmt_kind = if_stmt;
-    ret.data.if_stmt = s;
-    return ret;
-}
-
-// Return an AST for the given statment
-stmt_t ast_stmt_while(while_stmt_t s)
-{
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.next = NULL;
-    ret.stmt_kind = while_stmt;
-    ret.data.while_stmt = s;
-    return ret;
-}
-
-// Return an AST for the given statment
-stmt_t ast_stmt_read(read_stmt_t s)
-{
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.next = NULL;
-    ret.stmt_kind = read_stmt;
-    ret.data.read_stmt = s;
-    return ret;
-}
-
-// Return an AST for the given statment
-stmt_t ast_stmt_write(write_stmt_t s)
-{
-    // debug_print("Entering ast_stmt_write...\n");
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.next = NULL;
-    ret.stmt_kind = write_stmt;
-    ret.data.write_stmt = s;
-    return ret;
-}
-
-// Return an AST for the given statment
-stmt_t ast_stmt_skip(skip_stmt_t s)
-{
-    stmt_t ret;
-    ret.file_loc = s.file_loc;
-    ret.type_tag = stmt_ast;
-    ret.stmt_kind = skip_stmt;
-    ret.next = NULL;
-    return ret;
-}
-
-// Return an AST for an odd condition
-odd_condition_t ast_odd_condition(expr_t expr)
-{
-    odd_condition_t ret;
-    ret.file_loc = expr.file_loc;
-    ret.type_tag = odd_condition_ast;
-    ret.expr = expr;
+    static_decl_t ret;
+    ret.file_loc = file_location_copy(ds.file_loc);
+    ret.type_tag = static_decl_ast;
+    ret.size_in_bytes = ds.size_in_bytes;
+    ret.size_name = ds.size_name;
+    ret.ident = ident;
+    ret.initializer = initializer;
     return ret;
 }
 
 // Return an AST for an initializer with the given value
-rel_op_condition_t ast_rel_op_condition(expr_t expr1, token_t rel_op,
-					expr_t expr2)
+initializer_t ast_initializer_given(token_t eqs, word_type value)
 {
-    rel_op_condition_t ret;
-    ret.file_loc = expr1.file_loc;
-    ret.type_tag = rel_op_condition_ast;
-    ret.expr1 = expr1;
-    ret.rel_op = rel_op;
-    ret.expr2 = expr2;
+    initializer_t ret;
+    ret.file_loc = file_location_copy(eqs.file_loc);
+    ret.type_tag = initializer_ast;
+    ret.number = value;
     return ret;
 }
 
-// Return an AST for an odd condition
-condition_t ast_condition_odd(odd_condition_t odd_cond)
+// Return an AST for a stack section AST
+// with the given keyword and stack bottom address.
+stack_section_t ast_stack_section(token_t kw, unsigned int stack_bottom)
 {
-    condition_t ret;
-    ret.file_loc = odd_cond.file_loc;
-    ret.type_tag = condition_ast;
-    ret.cond_kind = ck_odd;
-    ret.data.odd_cond = odd_cond;
+    stack_section_t ret;
+    ret.file_loc = file_location_copy(kw.file_loc);
+    ret.type_tag = stack_section_ast;
+    ret.stack_bottom_addr = stack_bottom;
     return ret;
 }
 
-// Return an AST for a relational condition
-condition_t ast_condition_rel(rel_op_condition_t rel_op_cond)
+// Return an AST for an empty initializer 
+extern initializer_t ast_initializer_empty(empty_t e)
 {
-    condition_t ret;
-    ret.file_loc = rel_op_cond.file_loc;
-    ret.type_tag = condition_ast;
-    ret.cond_kind = ck_rel;
-    ret.data.rel_op_cond = rel_op_cond;
+    initializer_t ret;
+    ret.file_loc = file_location_copy(e.file_loc);
+    ret.type_tag = initializer_ast;
+    ret.number = 0;
     return ret;
 }
 
-// Return an AST for an odd condition
-binary_op_expr_t ast_binary_op_expr(expr_t expr1, token_t arith_op,
-				    expr_t expr2)
+// Return an AST for empty found in the file named fn, on line ln
+empty_t ast_empty(const char *fn, unsigned int ln)
 {
-    binary_op_expr_t ret;
-    ret.file_loc = expr1.file_loc;
-    ret.type_tag = binary_op_expr_ast;
-
-    expr_t *p = (expr_t *) malloc(sizeof(expr_t));
-    if (p == NULL) {
-	bail_with_error("Unable to allocate space for a %s!", "expr_t");
-    }
-    *p = expr1;
-    ret.expr1 = p;
-
-    ret.arith_op = arith_op;
-    
-    p = (expr_t *) malloc(sizeof(expr_t));
-    if (p == NULL) {
-	bail_with_error("Unable to allocate space for a %s!", "expr_t");
-    }
-    *p = expr2;
-    ret.expr2 = p;
-
+    empty_t ret;
+    ret.file_loc = file_location_make(fn, ln);
+    ret.type_tag = empty_ast;
     return ret;
 }
 
-// Return an expression AST for a binary operation expresion
-expr_t ast_expr_binary_op(binary_op_expr_t e)
+// Return an AST for an identifier
+// found in the file named fn, on line ln, with the given name.
+ident_t ast_ident(const char *fn, unsigned int ln, const char *name)
 {
-    expr_t ret;
-    ret.file_loc = e.file_loc;
-    ret.type_tag = expr_ast;
-    ret.expr_kind = expr_bin;
-    ret.data.binary = e;
-    return ret;
-}
-
-// Return an expression AST for an signed number
-expr_t ast_expr_negated_number(token_t sign, number_t number)
-{
-    expr_t ret;
-    ret.file_loc = file_location_copy(sign.file_loc);
-    ret.type_tag = expr_ast;
-    ret.expr_kind = expr_number;
-    ret.data.number = number;
-    // negate the value
-    ret.data.number.value = - ret.data.number.value;
-    return ret;
-}
-
-// Return an expression AST for an signed number
-expr_t ast_expr_pos_number(token_t sign, number_t number)
-{
-    expr_t ret;
-    ret.file_loc = file_location_copy(sign.file_loc);
-    ret.type_tag = expr_ast;
-    ret.expr_kind = expr_number;
-    ret.data.number = number;
-    return ret;
-}
-
-// Return an AST for the given token
-token_t ast_token(file_location *file_loc, const char *text, int code)
-{
-    token_t ret;
-    ret.file_loc = file_loc;
-    ret.type_tag = token_ast;
-    ret.text = text;
-    ret.code = code;
+    ident_t ret;
+    ret.file_loc = file_location_make(fn, ln);
+    ret.type_tag = ident_ast;
+    ret.name = name;
     return ret;
 }
 
@@ -639,57 +354,27 @@ number_t ast_number(token_t sgn, word_type value)
     return ret;
 }
 
-// Return an AST for an identifier
-ident_t ast_ident(file_location *file_loc, const char *name)
+// Return an AST for an (unsigned) number
+// with the given value
+unsignednum_t ast_unsignednum(const char *fn, unsigned int ln,
+			      unsigned int value)
 {
-    ident_t ret;
-    ret.file_loc = file_loc;
-    ret.type_tag = ident_ast;
-    ret.name = name;
+    unsignednum_t ret;
+    ret.file_loc = file_location_make(fn, ln);
+    ret.type_tag = unsignednum_ast;
+    ret.value = value;
     return ret;
 }
 
-// Return an AST for an expression that's a binary expression
-expr_t ast_expr_binary_op_expr(binary_op_expr_t e)
+// Return an AST for a token
+token_t ast_token(const char *fn, unsigned int ln, int token_code)
 {
-    expr_t ret;
-    ret.file_loc = e.file_loc;
-    ret.type_tag = binary_op_expr_ast;
-    ret.expr_kind = expr_bin;
-    ret.data.binary = e;
+    token_t ret;
+    ret.file_loc = file_location_make(fn, ln);
+    ret.type_tag = token_ast;
+    ret.code = token_code;
     return ret;
-}
-
-// Return an AST for an expression that's an identifier
-expr_t ast_expr_ident(ident_t e)
-{
-    expr_t ret;
-    ret.file_loc = e.file_loc;
-    ret.type_tag = expr_ast;
-    ret.expr_kind = expr_ident;
-    ret.data.ident = e;
-    return ret;
-}
-
-// Return an AST for an expression that's a number
-expr_t ast_expr_number(number_t e)
-{
-    expr_t ret;
-    ret.file_loc = e.file_loc;
-    ret.type_tag = expr_ast;
-    ret.expr_kind = expr_number;
-    ret.data.number = e;
-    return ret;
-}
-
-// Return an AST for empty found in the given file location
-empty_t ast_empty(file_location *file_loc)
-{
-    empty_t ret;
-    ret.file_loc = file_loc;
-    ret.type_tag = empty_ast;
-    return ret;
-}
+}    
 
 // Requires: lst is a pointer to a non-circular 
 //           linked list with next pointers
@@ -698,11 +383,10 @@ empty_t ast_empty(file_location *file_loc)
 // This only returns NULL if lst == NULL.
 void *ast_last_list_elem(void *lst)
 {
-    // debug_print("Entering ast_last_list_elem\n");
     if (lst == NULL) {
 	return lst;
     }
-    // assert(lst != NULL);
+    // assert lst is not NULL
     void *prev = NULL;
     while (lst != NULL) {
 	prev = lst;
@@ -716,7 +400,7 @@ void *ast_last_list_elem(void *lst)
 //           linked list with next pointers
 //           as in generic_t
 // Return the number of elements in the linked list lst
-int ast_list_length(void *lst)
+extern int ast_list_length(void *lst)
 {
     int ret = 0;
     generic_t *p = (generic_t *) lst;
@@ -725,13 +409,4 @@ int ast_list_length(void *lst)
 	ret++;
     }
     return ret;
-}
-
-// Requires: lst is a pointer to a non-circular 
-//           linked list with next pointers
-//           as in generic_t
-// Is lst empty?
-bool ast_list_is_empty(void *lst)
-{
-    return lst == NULL;
 }

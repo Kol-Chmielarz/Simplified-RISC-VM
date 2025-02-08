@@ -1,4 +1,4 @@
-/* $Id: utilities.c,v 1.11 2023/10/19 14:10:52 leavens Exp $ */
+/* $Id: utilities.c,v 1.3 2023/09/16 16:23:10 leavens Exp $ */
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,7 +27,6 @@ void debug_print(const char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     vdebug_print(fmt, args);
-    va_end(args);
 }
 
 // The variadic version of debug_print
@@ -69,38 +68,9 @@ static void vbail_with_error(const char* fmt, va_list args)
     exit(EXIT_FAILURE);
 }
 
-// Print an error message on stderr
-// starting with the file name and line number from the floc argument
-// (prints: filename, a colon, " line ", the line number, and a space)
-// and then the message.
-// Then exit with a failure code, so this function does not return.
-void bail_with_prog_error(file_location floc, const char *fmt, ...)
+// print a newline on out and flush out
+void newline(FILE *out)
 {
-    fflush(stdout); // flush so output comes after what has happened already
-    // print file, line, column information
-    fprintf(stderr, "%s: line %d ", floc.filename, floc.line);
-
-    va_list(args);
-    va_start(args, fmt);
-    vbail_with_error(fmt, args);
+    fprintf(out, "\n");
+    fflush(out);
 }
-
-#define BUF_SIZE 1024
-
-// Call yyerror to print an error message on stderr
-// starting with the filename, ":", the lexer's current line number, ": ",
-// and then the formatted message (as in sprintf)
-extern void formatted_yyerror(const char *filename, const char *fmt, ...)
-{
-    fflush(stdout); // flush so output comes after what has happened already
-    // print file, line information
-    fprintf(stderr, "%s: ", filename);
-
-    char buf[BUF_SIZE];
-    va_list(args);
-    va_start(args, fmt);
-    vsnprintf(buf, BUF_SIZE, fmt, args);
-    yyerror(filename, buf);
-    va_end(args);
-}
-    

@@ -1,164 +1,131 @@
-/* $Id: symtab.c,v 1.4 2023/11/01 13:20:24 leavens Exp $ */
-#include <stddef.h>
+/* $Id: symtab.c,v 1.3 2023/09/14 22:29:44 leavens Exp $ */
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
 #include "symtab.h"
-#include "scope.h"
 #include "utilities.h"
 
-// The symbol table is a stack of scope (see the scope module).
+// For a data structure, we use an array (for now),
+// although a hash table would be better...
 
-// index of the top of the stack of scopes
-static int symtab_top_idx = -1;
+// size is also the index of the next element to allocate
+static int size;
+// The data structure is such that the first size entries contain actual data
+static id_attrs entries[MAX_SYMTAB_SIZE];
 
-// the symbol table itself
-static scope_t *symtab[MAX_NESTING];
+// The symbol table's invariant
+void symtab_okay()
+{
+    assert(0 <= size);
+    assert(size < MAX_SYMTAB_SIZE);
+    for (int i = size; i < MAX_SYMTAB_SIZE; i++) {
+	assert(entries[i].name == NULL);
+    }
+}
 
 // initialize the symbol table
 void symtab_initialize()
 {
-    // initialize the internal state
-    symtab_top_idx = -1;
-    for (int i = 0; i < MAX_NESTING; i++) {
-	symtab[i] = NULL;
+    size = 0; // no data yet
+    id_attrs none;
+    none.name = NULL;
+    none.file_loc = NULL;
+    none.addr = 0;
+    for (int i = 0; i < MAX_SYMTAB_SIZE; i++) {
+	entries[i] = none;
     }
+    symtab_okay();
 }
 
-// Return the number of scopes currently in the symbol table.
-unsigned int symtab_size()
-{
-    return symtab_top_idx + 1;
-}
+// Return the number of mappings in this symbol table
+unsigned int symtab_size() { return size; }
 
-// Does this symbol table have any scopes in it?
-bool symtab_empty()
-{
-    return symtab_size() == 0;
-}
+// Is this symbol table empty? (I.e., does it have not mappings?)
+bool symtab_empty() { return size == 0; }
 
-// Return the current scope's next location count (of variables).
-unsigned int symtab_scope_loc_count()
-{
-    return scope_loc_count(symtab[symtab_top_idx]);
-}
-
-// Return the current scope's size (the number of declared ids).
-unsigned int symtab_scope_size()
-{
-    return scope_size(symtab[symtab_top_idx]);
-}
-
-// Is the current scope full?
-bool symtab_scope_full()
-{
-    return scope_full(symtab[symtab_top_idx]);
-}
-
-// Return the current nesting level of the symbol table
-// (this is the number of (client made) symtab_enter_scope() calls
-// minus the number of symtab_leave_scope() calls
-unsigned int symtab_current_nesting_level()
-{
-    // assert(symtab_top_idx >= 0);
-    return symtab_top_idx;
-}
-
-// Is the symbol table itself full
-// (i.e., is symtab_current_nesting_level() equal to MAX_NESTING-1)?
-bool symtab_full()
-{
-    return symtab_current_nesting_level() == MAX_NESTING - 1;
-}
+// Is this symbol table full? (I.e., can it not hold more mappings?)
+// (i.e., is symtab_size() equal to MAX_SYMTAB_SIZE-1)?
+bool symtab_full() { return size >= MAX_SYMTAB_SIZE; }
 
 // Is the given name associated with some attributes?
-// (this looks back through all scopes).
 bool symtab_defined(const char *name)
 {
-    return symtab_lookup(name) != NULL;
+    id_attrs *v = symtab_lookup(name);
+    return v != NULL;
+}    
+
+// Requires: !symtab_full
+// Requires: !symtab_defined(attrs.name)
+// Remember the given attributes (i.e., an association from attrs.name
+// to the other parts of attrs)
+void symtab_insert(id_attrs attrs)
+{
+    if (symtab_full()) {
+	bail_with_error("The symtab is full!");
+    }
+    entries[size++] = attrs;
 }
 
-// Is the given name associated with some attributes in the current scope?
-// (this only looks in the current scope).
-bool symtab_defined_in_current_scope(const char *name)
+// if name == NULL or if name is not defined, return -1
+// if name is defined in the table, return its index
+static int find_index(const char *name)
 {
-    id_attrs *attrs = scope_lookup(symtab[symtab_top_idx], name);
-    return attrs != NULL;
+    if (name == NULL) {
+	return -1;
+    }
+    for (int i = 0; i < size; i++) {
+	if (strcmp(entries[i].name, name) == 0) {
+	    return i;
+	}
+    }
+    return -1;
 }
 
 
-// Put the given name, which is to be declared with kind k,
-// and has its declaration at the given file location (floc),
-// into the current scope's symbol table at the offset scope_next_offset().
-static void add_ident(scope_t *s, const char *name, id_attrs *attrs)
+// Return (a pointer to) the attributes of the given name
+// or NULL if there is no association for that name.
+id_attrs *symtab_lookup(const char *name)
 {
-    id_attrs *old_attrs = scope_lookup(s, name);
-    if (old_attrs != NULL) {
-        bail_with_prog_error(attrs->file_loc,
-		      "symtab_insert called with an already declared variable\"%s\"!",
-		      name);
+    int i = find_index(name);
+    if (0 <= i) {
+	return &entries[i];
     } else {
-	scope_insert(s, name, attrs);
+	return NULL;
     }
 }
 
-// Requires: symtab_defined_in_current_scope(name) && attrs != NULL.
-// If !symtab_defined_in_current_scope(name), then modify the current scope
-// to add an association from the given name to attrs.
-void symtab_insert(const char *name, id_attrs *attrs)
-{
-    add_ident(symtab[symtab_top_idx], name, attrs);
-}
+// iteration helpers
+// iterations use an external key which is a name
 
-// Requires: !symtab_full()
-// Start a new scope (for a procedure)
-void symtab_enter_scope()
+// Start an iteration by returning the first name in the symbol table,
+// return NULL if symtab_empty()
+const char *symtab_first_name()
 {
-    symtab_top_idx++;
-    symtab[symtab_top_idx] = scope_create();
-}
-
-// Requires: !symtab_empty()
-void symtab_leave_scope()
-{
-    if (symtab_top_idx < 0) {
-	bail_with_error("Cannot leave scope, no scope on symtab's stack!");
+    if (symtab_empty()) {
+	return NULL;
     }
-    symtab_top_idx--;
+    assert(0 < size);
+    return entries[0].name;
 }
 
-// Return (a pointer to) the attributes of the given name 
-// or NULL if there is no association for name in the symbol table.
-// (this looks back through all scopes).
-id_use *symtab_lookup(const char *name)
+// Are there more names defined in the symbol table after the given one?
+// This returns false if name is NULL, if name is not defined,
+// or if there are no more names following name in the symbol table
+bool symtab_more_after(const char *name)
 {
-    unsigned int levelsOut = 0;
-    for (int level = symtab_top_idx; 0 <= level; level--) {
-	id_attrs *attrs = scope_lookup(symtab[level], name);
-	if (attrs != NULL) {
-	    return id_use_create(attrs, levelsOut);
-	}
-	levelsOut++;
-    }
-    return NULL;
+    int i = find_index(name);
+    return (0 <= i && i < size);
 }
 
-// We'll use lexical addresses in HW4...
-// Requires: symtab_defined(name)
-// Return (a pointer to) the lexical address of the given name
-// or NULL if there is no association for name.
-/*
-lexical_address *symtab_lexical_address(const char *name)
+// Requires: symtab_more_after(name);
+// Return the next name defined in the symbol table after the given one,
+// but return NULL if there are no more names
+const char *symtab_next_name(const char *name)
 {
-    // maintaining: -1 <= level <= symtab_top_idx;
-    // maintaining: (for all int j:
-    //                level < j <= symtab_top_idx
-    //                   ==> !scope_defined(symtab[j], name))
-    for (int level = symtab_top_idx; 0 <= level; level--) {
-	id_attrs *attrs = scope_lookup(symtab[level], name);
-	if (attrs != NULL) {
-	    return lexical_address_create(symtab_top_idx - level,
-					  attrs->loc_offset);
-	}
+    int i = find_index(name);
+    if (i < 0 || i >= size) {
+	return NULL;
+    } else {
+	return entries[i+1].name;
     }
-    bail_with_error("Couldn't find %s for symtab_lexical_address!", name);
-    return NULL;
 }
-*/

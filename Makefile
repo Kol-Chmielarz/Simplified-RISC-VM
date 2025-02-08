@@ -1,104 +1,46 @@
-# $Id: Makefile,v 1.47 2023/10/20 02:03:45 leavens Exp leavens $
-# Makefile for parser and static analysis in COP 3402
+# $Id: Makefile,v 1.32 2023/09/22 20:16:39 leavens Exp $
+# Makefile for PL/0 compiler and code generation
 
 # Add .exe to the end of target to get that suffix in the rules
-COMPILER = compiler
-# Add .exe to the end of target to get that suffix in the rules
-LEXER = lexer
-
-# Tools used
+VM = vm
 CC = gcc
+# on Linux, the following can be used with gcc:
+# CFLAGS = -fsanitize=address -static-libasan -g -std=c17 -Wall
 CFLAGS = -g -std=c17 -Wall
-YACC = bison
-YACCFLAGS = -Wall --locations -d -v
-LEX = flex
-LEXFLAGS =
-# Unix command names
 MV = mv
 RM = rm -f
 SUBMISSIONZIPFILE = submission.zip
 ZIP = zip -9
-PL0 = pl0
-# Add the names of your own files with a .o suffix to link them in the program
-# Feel free to edit the following definition of COMPILER_OBJECTS
-COMPILER_OBJECTS = $(COMPILER)_main.o $(PL0)_lexer.o \
-		parser.o unparser.o id_use.o \
-		id_attrs.o ast.o $(PL0).tab.o file_location.o utilities.o \
-		scope.o scope_check.o symtab.o  
-
-# If you want to test the lexical analysis part separately,
-# then you might want to build the lexer,
-# and if so, then add the names of your own .o files for the lexer below
-LEXER_OBJECTS = $(LEXER)_main.o $(LEXER).o $(PL0)_lexer.o \
-		ast.o $(PL0).tab.o file_location.o utilities.o 
-
-# different kinds of tests
-ASTTESTS = hw3-asttest0.pl0 hw3-asttest1.pl0 hw3-asttest2.pl0 \
-	hw3-asttest3.pl0 hw3-asttest4.pl0 hw3-asttest5.pl0 \
-	hw3-asttest6.pl0 hw3-asttest7.pl0 hw3-asttest8.pl0 \
-	hw3-asttest9.pl0 hw3-asttestA.pl0 hw3-asttestB.pl0 \
-	hw3-asttestC.pl0 hw3-asttestD.pl0
-REGULARTESTS = hw3-test0.pl0 hw3-test1.pl0 hw3-test2.pl0 hw3-test3.pl0 \
-	hw3-test4.pl0 hw3-test5.pl0 hw3-test6.pl0 hw3-test7.pl0 \
-	hw3-test8.pl0 hw3-test9.pl0 hw3-testA.pl0
-ERRTESTS = hw3-errtest0.pl0 hw3-errtest1.pl0 hw3-errtest2.pl0 \
-	hw3-errtest3.pl0 hw3-errtest4.pl0 hw3-errtest5.pl0
-PARSEERRTESTS = hw3-parseerrtest0.pl0 hw3-parseerrtest1.pl0 hw3-parseerrtest2.pl0 \
-	hw3-parseerrtest3.pl0 hw3-parseerrtest4.pl0 hw3-parseerrtest5.pl0 \
-	hw3-parseerrtest6.pl0 hw3-parseerrtest7.pl0 hw3-parseerrtest8.pl0
-NONDECLTESTS = $(ASTTESTS) $(REGULARTESTS) $(ERRTESTS) $(PARSEERRTESTS)
-SCOPETESTS = hw3-scope-test0.pl0 hw3-scope-test1.pl0  hw3-scope-test2.pl0
-DECLERRTESTS = hw3-declerrtest0.pl0 hw3-declerrtest1.pl0 hw3-declerrtest2.pl0 \
-	hw3-declerrtest3.pl0 hw3-declerrtest4.pl0 hw3-declerrtest5.pl0 \
-	hw3-declerrtest6.pl0 hw3-declerrtest7.pl0 hw3-declerrtest8.pl0 \
-	hw3-declerrtest9.pl0 hw3-declerrtestA.pl0 hw3-declerrtestB.pl0 \
-	hw3-declerrtestC.pl0
-DECLTESTS = $(SCOPETESTS) $(DECLERRTESTS)
-GOODTESTS = $(ASTTESTS) $(REGULARTESTS) $(SCOPETESTS)
-BADTESTS = $(ERRTESTS) $(PARSEERRTESTS) $(DECLERRTESTS)
-# ALLTESTS is all of the test files, if you add more tests you can add to this list
-ALLTESTS = $(NONDECLTESTS) $(DECLTESTS)
-EXPECTEDOUTPUTS = $(ALLTESTS:.pl0=.out)
+# Add the names of your own files with a .o suffix to link them into the VM
+VM_OBJECTS = vm.o \
+			 reg_instructs.o immed_instructs.o jump_instructs.o call_instructs.o \
+			 syscall.o tracing.o \
+			 memory.o registers.o \
+             machine_types.o instruction.o bof.o \
+             regname.o utilities.o \
+			 # machine_main.o machine.o
+SOURCESLIST = `echo $(VM_OBJECTS) | sed -e 's/\\.o/.c/g'`
+TESTSOURCES = vm_test0.asm vm_test1.asm vm_test2.asm \
+		vm_test3.asm vm_test4.asm vm_test5.asm vm_test6.asm \
+		vm_test7.asm
+TESTS = vm_test0.bof vm_test1.bof vm_test2.bof vm_test3.bof \
+	vm_test4.bof vm_test5.bof vm_test6.bof vm_test7.bof
+EXPECTEDOUTPUTS = $(TESTS:.bof=.out)
+EXPECTEDLISTINGS = $(TESTS:.bof=.lst)
 # STUDENTESTOUTPUTS is all of the .myo files corresponding to the tests
-# if you add more tests, you can add more to this list
-STUDENTTESTOUTPUTS = $(ALLTESTS:.pl0=.myo)
+# if you add more tests, you can add more to this list,
+# or just add to TESTS above
+STUDENTTESTOUTPUTS = $(TESTS:.bof=.myo)
+# STUDENTESTLISTINGS is all of the .myp files corresponding to the tests
+# if you add more tests, you can add more to this list,
+# or just add to TESTS above
+STUDENTTESTLISTINGS = $(TESTS:.bof=.myp)
 
-.DEFAULT: $(COMPILER)
-$(COMPILER): $(COMPILER_OBJECTS)
-	$(CC) $(CFLAGS) -o $(COMPILER) $(COMPILER_OBJECTS)
+# create the VM executable
+.PRECIOUS: $(VM)
 
-$(COMPILER)_main.o: $(COMPILER)_main.c
-	$(CC) $(CFLAGS) -c $<
-
-$(PL0).tab.o: $(PL0).tab.c $(PL0).tab.h
-	$(CC) $(CFLAGS) -c $<
-
-$(PL0).tab.c $(PL0).tab.h: $(PL0).y ast.h parser_types.h machine_types.h 
-	$(YACC) $(YACCFLAGS) $(PL0).y
-
-.PHONY: start-bison-file
-start-bison-file:
-	@if test -f $(PL0).y; \
-        then echo "$(PL0).y already exists, not starting it!" >&2; \
-              exit 2 ; \
-        fi
-	cp bison_$(PL0)_y_top.y $(PL0).y
-	chmod u+w $(PL0).y
-
-$(PL0)_lexer.l: $(PL0).tab.h
-
-.PRECIOUS: $(PL0)_lexer.c
-$(PL0)_lexer.c: $(PL0)_lexer.l $(PL0).tab.h
-	$(LEX) $(LEXFLAGS) $<
-
-$(PL0)_lexer.o: $(PL0)_lexer.c ast.h utilities.h file_location.h
-	$(CC) $(CFLAGS) -Wno-unused-function -Wno-unused-but-set-variable -c $(PL0)_lexer.c
-
-$(LEXER): $(LEXER_OBJECTS)
-	$(CC) $(CFLAGS) $^ -o $@
-
-$(LEXER)_main.o: $(LEXER)_main.c
-	$(CC) $(CFLAGS) -c $<
+$(VM): $(VM_OBJECTS)
+	$(CC) $(CFLAGS) -o $(VM) $(VM_OBJECTS)
 
 # rule for compiling individual .c files
 %.o: %.c %.h
@@ -106,151 +48,218 @@ $(LEXER)_main.o: $(LEXER)_main.c
 
 .PHONY: clean
 clean:
-	$(RM) *~ *.o '#'*
-	$(RM) $(PL0)_lexer.c $(PL0)_lexer.h
-	$(RM) $(PL0).tab.c $(PL0).tab.h $(PL0).output
-	$(RM) $(COMPILER).exe $(COMPILER)
+	$(RM) *~ *.o *.myo *.myp '#'*
+	$(RM) $(VM).exe $(VM)
 	$(RM) *.stackdump core
 	$(RM) $(SUBMISSIONZIPFILE)
 
-cleanall: clean
-	$(RM) *.myo
+# rule for making .bof files with the assembler ($(ASM));
+# this might need to be done if not running on Linux (or Windows)
 
-.PRECIOUS: %.myo
-%.myo: %.pl0 $(COMPILER)
-	./$(COMPILER) $< > $@ 2>&1
+%.bof: %.asm $(ASM)
+	./$(ASM) $<
 
-.PHONY: check-outputs check-nondecl-outputs check-decl-outputs
-check-outputs: check-nondecl-outputs check-decl-outputs
-	@echo 'Be sure to look for two test summaries above (nondeclaration and declaration tests)'
+# Rules for making individual outputs (e.g., execute make test1.myo)
+# the .myo files are outputs from running the .bof files in the VM
+.PRECIOUS: %.myo %.myp
+%.myo: %.bof $(VM)
+	./$(VM) $< > $@ 2>&1
 
-check-nondecl-outputs: $(COMPILER) $(NONDECLTESTS)
-	@DIFFS=0; \
-	for f in `echo $(NONDECLTESTS) | sed -e 's/\\.pl0//g'`; \
-	do \
-		echo running "$$f.pl0"; \
-		./$(COMPILER) "$$f.pl0" >"$$f.myo" 2>&1; \
-		diff -w -B "$$f.out" "$$f.myo" && echo 'passed!' || DIFFS=1; \
-	done; \
-	if test 0 = $$DIFFS; \
-	then \
-		echo 'All nondeclaration tests passed!'; \
-	else \
-		echo 'Some nondeclaration test(s) failed!'; \
-	fi
+%.myp: %.bof $(VM)
+	./$(VM) -p $< > $@ 2>&1
 
-check-decl-outputs: $(COMPILER) $(DECLTESTS)
-	@DIFFS=0; \
-	for f in `echo $(DECLTESTS) | sed -e 's/\\.pl0//g'`; \
-	do \
-		echo running "$$f.pl0"; \
-		./$(COMPILER) "$$f.pl0" >"$$f.myo" 2>&1; \
-		diff -w -B "$$f.out" "$$f.myo" && echo 'passed!' || DIFFS=1; \
-	done; \
-	if test 0 = $$DIFFS; \
-	then \
-		echo 'All declaration checking tests passed!'; \
-	else \
-		echo 'Some declaration checking test(s) failed!'; \
-	fi
+# main target for testing
+.PHONY: check-outputs
+check-outputs: $(VM) $(ASM) $(TESTS) check-lst-outputs check-vm-outputs
+	@echo 'Be sure to look for two test summaries above (listings and execution)'
 
-check-good-outputs: $(COMPILER) $(GOODTESTS)
+check-lst-outputs check-asm-outputs:
 	DIFFS=0; \
-	for f in `echo $(GOODTESTS) | sed -e 's/\\.pl0//g'`; \
+	for f in `echo $(TESTS) | sed -e 's/\\.bof//g'`; \
 	do \
-		$(RM) "$$f.myo" ; \
-		./$(COMPILER) $$f.pl0 >"$$f.myo" 2>&1; \
-		diff -w -B "$$f.out" "$$f.myo" && echo 'passed!' || DIFFS=1; \
+		echo listing "$$f.bof" using ./vm -p ...; \
+		./vm -p "$$f.bof" > "$$f.myp" 2>&1; \
+		diff -w -B "$$f.lst" "$$f.myp" && echo 'passed!' \
+			|| { echo 'failed!'; DIFFS=1; }; \
 	done; \
 	if test 0 = $$DIFFS; \
 	then \
-		echo 'All tests passed!'; \
+		echo 'All listing tests passed!'; \
 	else \
-		echo 'Test(s) failed!'; \
+		echo 'Some listing test(s) failed!'; \
 	fi
 
-check-bad-outputs: $(COMPILER) $(BADTESTS)
+check-vm-outputs:
 	DIFFS=0; \
-	for f in `echo $(BADTESTS) | sed -e 's/\\.pl0//g'`; \
+	for f in `echo $(TESTS) | sed -e 's/\\.bof//g'`; \
 	do \
-		$(RM) "$$f.myo" ; \
-		./$(COMPILER) $$f.pl0 >"$$f.myo" 2>&1; \
-		diff -w -B "$$f.out" "$$f.myo" && echo 'passed!' || DIFFS=1; \
+		echo running "$$f.bof" in the VM ...; \
+		./vm "$$f.bof" > "$$f.myo" 2>&1; \
+		diff -w -B "$$f.out" "$$f.myo" && echo 'passed!' \
+			|| { echo 'failed!'; DIFFS=1; }; \
 	done; \
 	if test 0 = $$DIFFS; \
 	then \
-		echo 'All tests passed!'; \
+		echo 'All VM execution tests passed!'; \
 	else \
-		echo 'Test(s) failed!'; \
+		echo 'Some VM execution test(s) failed!'; \
 	fi
 
-$(SUBMISSIONZIPFILE): *.c *.h $(STUDENTTESTOUTPUTS)
-	$(ZIP) $(SUBMISSIONZIPFILE) $(PL0).y $(PL0)_lexer.l *.c *.h Makefile
-	$(ZIP) $(SUBMISSIONZIPFILE) $(STUDENTTESTOUTPUTS) $(ALLTESTS) $(EXPECTEDOUTPUTS)
+# Automatically generate the submission zip file
+$(SUBMISSIONZIPFILE): *.c *.h $(STUDENTTESTOUTPUTS) $(STUDENTTESTLISTINGS) \
+		Makefile
+	$(ZIP) $@ $^ asm.y asm_lexer.l $(EXPECTEDOUTPUTS) $(EXPECTEDLISTINGS)
 
-.PRECIOUS: $(SOURCESLIST)
-	echo *.c > $(SOURCESLIST)
+# instructor's section below...
 
-# developer's section below...
+ASM = asm
+DISASM = disasm
+LEX = flex
+LEXFLAGS =
+YACC = bison
+YACCFLAGS = -Wall --locations -d -v
+LEXER = lexer
 
-.PRECIOUS: %.out
-%.out: %.pl0 $(COMPILER)
-	./$(COMPILER) $< > $@ 2>&1
+$(ASM)_lexer.c: $(ASM)_lexer.l
+	$(LEX) $(LEXFLAGS) $<
 
-.PHONY: create-outputs
-create-outputs: $(COMPILER) $(ALLTESTS)
+$(ASM)_lexer.o: $(ASM)_lexer.c ast.h $(ASM).tab.h utilities.h file_location.h
+	$(CC) $(CFLAGS) -Wno-unused-but-set-variable -Wno-unused-function -c $<
+
+$(ASM).tab.o: $(ASM).tab.c $(ASM).tab.h
+	$(CC) $(CFLAGS) -Wno-unused-const-variable -c $<
+
+$(ASM).tab.c $(ASM).tab.h: $(ASM).y ast.h parser_types.h machine_types.h
+	$(YACC) $(YACCFLAGS) $(ASM).y
+
+lexer.o: lexer.c lexer.h $(ASM).tab.h
+	$(CC) $(CFLAGS) -c $<
+
+$(LEXER) : $(LEXER)_main.o $(LEXER).o $(ASM)_lexer.o ast.o $(ASM).tab.o file_location.o lexer.o utilities.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(ASM)_main.o: $(ASM)_main.c $(ASM).tab.h ast.h parser_types.h machine_types.h
+
+$(ASM): $(ASM)_main.o $(ASM).tab.o $(ASM)_lexer.o $(ASM)_unparser.o ast.o bof.o file_location.o lexer.o pass1.o assemble.o instruction.o machine_types.o regname.o symtab.o utilities.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(DISASM): disasm_main.o disasm.o instruction.o bof.o machine_types.o regname.o utilities.o
+	$(CC) $(CFLAGS) -o $(DISASM) $^
+
+.PRECIOUS: %.out %.lst
+%.out: %.bof $(VM)
 	@if test '$(IMTHEINSTRUCTOR)' != true ; \
 	then \
-		echo 'Students should use the target check-outputs,' ; \
-		echo 'as using this target (create-outputs) will invalidate the tests' ; \
+		echo 'Students should NOT use the target $@,'; \
+		echo 'as using this target ($@) will invalidate a test'; \
 		exit 1; \
-	fi; \
-	for f in `echo $(ALLTESTS) | sed -e 's/\\.pl0//g'`; \
+	fi
+	$(RM) $@
+	./$(VM) $< > $@ 2>&1
+
+%.lst: %.bof $(VM)
+	@if test '$(IMTHEINSTRUCTOR)' != true ; \
+	then \
+		echo 'Students should NOT use the target $@,'; \
+		echo 'as using this target ($@) will invalidate a test'; \
+		exit 1; \
+	fi
+	./$(VM) -p $< > $@ 2>&1
+
+.PHONY: create-outputs
+create-outputs: $(VM) $(ASM) $(TESTS)
+	@if test '$(IMTHEINSTRUCTOR)' != true ; \
+	then \
+		echo 'Students should use the target check-outputs,' ;\
+		echo 'as using this target (create-outputs) will invalidate the tests!' ; \
+		exit 1; \
+	fi
+	$(MAKE) create-vm-outputs
+	$(MAKE) create-asm-outputs
+
+create-vm-outputs: $(VM) $(ASM) $(TESTS)
+	@if test '$(IMTHEINSTRUCTOR)' != true ; \
+	then \
+		echo 'Students should not use the target create-vm-outputs,'; \
+		echo 'as using this target will invalidate the tests!' ; \
+		exit 1; \
+	fi
+	for f in `echo $(TESTS) | sed -e 's/\\.bof//g'`; \
 	do \
-		echo running compiler on "$$f.pl0"; \
 		$(RM) "$$f.out"; \
-		./$(COMPILER) "$$f.pl0" >"$$f.out" 2>&1; \
-	done; \
-	echo done creating test outputs!
+		echo running "$$f.bof" " ... in the VM"; \
+		./$(VM) "$$f.bof" > "$$f.out" 2>&1; \
+	done
+	echo 'done creating VM test tracing outputs!'
+
+create-asm-outputs: $(VM) $(ASM) $(TESTS)
+	@if test '$(IMTHEINSTRUCTOR)' != true ; \
+	then \
+		echo 'Students should not use the target create-vm-outputs,'; \
+		echo 'as using this target will invalidate the tests!' ; \
+		exit 1; \
+	fi
+	for f in `echo $(TESTS) | sed -e 's/\\.bof//g'`; \
+	do \
+		$(RM) "$$f.lst"; \
+		./$(VM) -p "$$f.bof" > "$$f.lst" 2>&1; \
+	done
+	echo 'done creating listing outputs!'
 
 .PHONY: digest
-digest: digest.txt
-
-digest.txt: create-outputs
-	for f in `ls $(ALLTESTS) | sed -e 's/\\.pl0//g'`; \
-        do cat $$f.pl0; echo " "; cat $$f.out; echo " "; echo " "; \
+digest digest.txt: $(EXPECTEDOUTPUTS) $(EXPECTEDLISTINGS)
+	for f in $(EXPECTEDLISTINGS) ; \
+        do cat $$f; echo " "; \
+	cat `echo $$f | sed -e 's/\\.lst/.out/'`; \
+        echo " "; echo " "; \
         done >digest.txt
 
 # don't use develop-clean unless you want to regenerate the expected outputs
-.PHONY: develop-clean
-develop-clean: clean
-	@if test '$(IMTHEINSTRUCTOR)' != true ; \
-	then \
-		echo 'Students should use the target clean,' ; \
-		echo 'as using this target (develop-clean) will invalidate the tests'; \
-		exit 1; \
-	fi
-	$(RM) *.out digest.txt
+.PHONY: develop-clean bof-clean asm-clean
+develop-clean: clean asm-clean
+	$(RM) digest.txt
+	$(RM) y.tab.h
 
-TESTSZIPFILE = ~/temp/hw3-tests.zip
-PROVIDEDFILES = compiler_main.c utilities.[ch] lexer.[ch] unparser.[ch] \
-		machine_types.h parser_types.h bison_pl0_y_top.y parser.[ch] \
-		ast.[ch] file_location.[ch] id_attrs.[ch] id_use.[ch]
+asm-clean:
+	$(RM) $(ASM)_lexer.[ch] $(ASM).tab.[ch] asm.output
+	$(RM) $(ASM).exe $(ASM) $(DISASM).exe $(DISASM) $(LEXER) $(LEXER).exe
 
-hw3-tests.zip: create-outputs $(TESTSZIPFILE)
+outputs-clean: clean asm-clean bof-clean
+	$(RM) $(EXPECTEDOUTPUTS) $(EXPECTEDLISTINGS)
 
-$(TESTSZIPFILE): $(ALLTESTS) Makefile $(PROVIDEDFILES)
+bof-clean:
+	$(RM) *.bof
+
+TESTSZIPFILE = ~/temp/hw1-tests.zip
+PROVIDEDFILES = Makefile asm_main.c asm.y asm_lexer.l \
+		asm_lexer.c asm.tab.h parser_types.h \
+		asm_unparser.[ch] ast.[ch] bof.[ch] machine_types.[ch] \
+		utilities.[ch] file_location.[ch] lexer.[ch] \
+		pass1.[ch] assemble.[ch] instruction.[ch] regname.[ch] \
+		symtab.[ch] utilities.[ch] id_attrs.h \
+		disasm_main.c disasm.[ch] \
+		vm_test*.asm vm_test*.out vm_test*.bof vm_test*.lst
+
+.PHONY: zip
+zip hw1-tests.zip: create-vm-outputs $(TESTSZIPFILE)
+
+$(TESTSZIPFILE): Makefile $(TESTS) $(PROVIDEDFILES)
 	$(RM) $(TESTSZIPFILE)
-	chmod 444 $(ALLTESTS) $(EXPECTEDOUTPUTS) $(PROVIDEDFILES)
-	chmod 744 Makefile
-	$(ZIP) $(TESTSZIPFILE) $(ALLTESTS) $(EXPECTEDOUTPUTS) Makefile $(PROVIDEDFILES)
+	chmod 444 Makefile $(TESTS) $(PROVIDEDFILES)
+	$(ZIP) $(TESTSZIPFILE) Makefile $(TESTS) $(PROVIDEDFILES)
+	chmod 754 Makefile $(TESTS) $(PROVIDEDFILES)
 
-.PHONY: hw3-solution.zip
-hw3-solution.zip ~/temp/hw3-solution.zip: Makefile $(PROVIDEDFILES) \
-			lexer.[ch] reserved.[ch] parser*.[ch] scope*.[ch] \
-			compiler_main.c $(ALLTESTS) sources.txt
-	$(MAKE) clean create-outputs
-	$(ZIP) ~/temp/hw3-solution.zip $^ $(EXPECTEDOUTPUTS)
+%.bof: %.$(ASM)
+	./$(ASM) $<
 
 .PHONY: check-separately
-check-separately: $(COMPILER_OBJECTS)
+check-separately:
+	$(CC) $(CFLAGS) -c *.c
+
+.PHONY: hw4-solution.zip
+hw4-solution.zip ~/temp/hw4-solution.zip: Makefile $(TESTS) $(PROVIDEDFILES) \
+			*.pl0 *.vmo *.vmi vm/*.[ch] vm/Makefile \
+			proc_holder.[ch] idUseCheck.[ch] \
+			sources.txt vm/sources.txt
+	$(MAKE) clean
+	$(ZIP) ~/temp/hw4-solution.zip $^

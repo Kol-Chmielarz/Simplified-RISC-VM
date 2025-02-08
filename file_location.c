@@ -1,6 +1,5 @@
-/* $Id: file_location.c,v 1.3 2023/10/19 06:14:57 leavens Exp $ */
+/* $Id: file_location.c,v 1.3 2023/09/10 13:28:44 leavens Exp $ */
 #include <stdlib.h>
-#include <assert.h>
 #include <stddef.h>
 #include "file_location.h"
 #include "utilities.h"
@@ -15,8 +14,6 @@ file_location *file_location_make(const char *filename,
     if (ret == NULL) {
 	bail_with_error("Could not allocate space for a file_location!");
     }
-    ret->filename = filename;
-    ret->line = line;
     return ret;
 }
 

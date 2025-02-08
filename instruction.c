@@ -1,4 +1,4 @@
-// $Id: instruction.c,v 1.4 2023/11/14 03:12:19 leavens Exp $
+// $Id: instruction.c,v 1.19 2023/09/18 17:17:55 leavens Exp $
 #include <errno.h>
 #include <string.h>
 #include "bof.h"
@@ -63,12 +63,9 @@ bin_instr_t instruction_read(BOFFILE bf)
     return bi;
 }
 
-// Requires: bof is open for writing in binary
-// Write the given instruction, instr, to bf in binary,
-// but exit with an error if there is a problem.
-void instruction_write_bin_instr(BOFFILE bf, bin_instr_t instr)
+void instr_write_bin_instr(BOFFILE bf, bin_instr_t i)
 {
-    size_t wr = fwrite(&instr, sizeof(instr), 1, bf.fileptr);
+    size_t wr = fwrite(&i, sizeof(i), 1, bf.fileptr);
     if (wr != 1) {
 	bail_with_error("Cannot write binary instr to %s", bf.filename);
     }
@@ -83,7 +80,7 @@ void instruction_write_regInstr(BOFFILE bf, reg_instr_t ri)
     bi.reg = ri;
     bi.reg.op = REG_O;
     assert(instruction_type(bi) == reg_instr_type);
-    instruction_write_bin_instr(bf, bi);
+    instr_write_bin_instr(bf, bi);
 }
 
 // Requires: bof is open for writing in binary
@@ -96,7 +93,7 @@ void instruction_write_syscallInstr(BOFFILE bf, syscall_instr_t si)
     bi.syscall.op = REG_O;
     bi.syscall.func = SYSCALL_F;
     assert(instruction_type(bi) == syscall_instr_type);
-    instruction_write_bin_instr(bf, bi);
+    instr_write_bin_instr(bf, bi);
 }
 
 
@@ -110,7 +107,7 @@ void instruction_write_immedInstr(BOFFILE bf, unsigned short op,
     bi.immed = ii;
     bi.immed.op = op;
     assert(instruction_type(bi) == immed_instr_type);
-    instruction_write_bin_instr(bf, bi);
+    instr_write_bin_instr(bf, bi);
 }
 
 // Requires: bof is open for writing in binary
@@ -123,7 +120,7 @@ void instruction_write_jumpInstr(BOFFILE bf, unsigned short op,
     bi.jump = ji;
     bi.jump.op = op;
     assert(instruction_type(bi) == jump_instr_type);
-    instruction_write_bin_instr(bf, bi);
+    instr_write_bin_instr(bf, bi);
 }
 
 // Requires: instr is a SYSCALL instruction
@@ -143,9 +140,6 @@ const char *instruction_syscall_mnemonic(unsigned int code)
 	break;
     case print_str_sc:
 	return "PSTR";
-	break;
-    case print_int_sc:
-	return "PINT";
 	break;
     case print_char_sc:
 	return "PCH";
@@ -415,7 +409,7 @@ const char *instruction_assembly_form(bin_instr_t instr) {
 // Requires: out is open and writable FILE
 // print the header of the instruction output table on out
 void instruction_print_table_heading(FILE *out) {
-    fprintf(out, "%-5s %s\n", "Addr", "Instruction");
+    fprintf(out, "%-5s: %s\n", "Addr", "Instruction");
 }
 
 // Requires: out is an open FILE
