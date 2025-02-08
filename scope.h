@@ -1,4 +1,4 @@
-/* $Id: scope.h,v 1.3 2023/11/13 12:51:59 leavens Exp $ */
+/* $Id: scope.h,v 1.2 2023/10/27 12:58:21 leavens Exp $ */
 #ifndef _SCOPE_H
 #define _SCOPE_H
 

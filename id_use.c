@@ -1,6 +1,5 @@
-/* $Id: id_use.c,v 1.8 2023/11/13 12:51:50 leavens Exp $ */
+/* $Id: id_use.c,v 1.1 2023/10/15 21:29:24 leavens Exp $ */
 #include <stdlib.h>
-#include "machine_types.h"
 #include "id_use.h"
 #include "utilities.h"
 
@@ -18,31 +17,23 @@ extern id_use *id_use_create(id_attrs *attrs, unsigned int levelsOut)
     }
     ret->attrs = attrs;
     ret->levelsOutward = levelsOut;
-    // If labels are being used,
-    // don't create a label for procedures here!
+    // Shouldn't create a label for procedures here!
     // A label should only be created when creating the proc_decl's AST!
     return ret;
 }
 
-// Requires: idu != NULL
-// Return a pointer to the attributes of this id_use
-// and the result will never be NULL
-id_attrs *id_use_get_attrs(id_use *idu)
-{
-    assert(idu != NULL);
-    return idu->attrs;
-}
-
-
+// We'll use lexical addresses in HW4...
 // Requires: idu != NULL
 // Return (a pointer to) the lexical address for idu.
-lexical_address *id_use_2_lexical_address(id_use *idu)
+/*
+extern lexical_address *id_use_2_lexical_address(id_use *idu)
 {
     lexical_address *ret = (lexical_address *)malloc(sizeof(lexical_address));
     if (ret == NULL) {
 	bail_with_error("No space to allocate lexical_address!");
     }
     ret->levelsOutward = idu->levelsOutward;
-    ret->offsetInAR = BYTES_PER_WORD * (idu->attrs->offset_count);
+    ret->offsetInAR = idu->attrs->offset_count * BYTES_PER_WORD;
     return ret;
 }
+*/

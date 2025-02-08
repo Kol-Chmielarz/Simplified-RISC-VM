@@ -1,4 +1,4 @@
-/* $Id: unparser.c,v 1.10 2023/11/13 14:08:44 leavens Exp $ */
+/* $Id: unparser.c,v 1.14 2023/10/20 02:00:27 leavens Exp leavens $ */
 #include <stdio.h>
 #include <assert.h>
 #include "unparser.h"
@@ -40,6 +40,7 @@ extern void unparseBlock(FILE *out, block_t blk, int level,
 void unparseConstDecls(FILE *out, const_decls_t cds, int level)
 {
     // debug_print("unparseConstDecls entry ...\n");
+    assert(cds.type_tag == const_decls_ast);
     const_decl_t *cd_listp = cds.const_decls;
     while (cd_listp != NULL) {
 	unparseConstDecl(out, *cd_listp, level);
@@ -62,6 +63,7 @@ void unparseConstDecl(FILE *out, const_decl_t cd, int level)
 void unparseConstDefs(FILE *out, const_defs_t cdfs, int level)
 {
     // debug_print("unparseConstDefs entry ...\n");
+    assert(cdfs.type_tag == const_defs_ast);
     bool printed_already = false;
     const_def_t *cdp = cdfs.const_defs;
     while (cdp != NULL) {
@@ -88,6 +90,7 @@ extern void unparseConstDef(FILE *out, const_def_t cdf, int level)
 void unparseVarDecls(FILE *out, var_decls_t vds, int level)
 {
     // debug_print("Entering unparseVarDecls ...\n");
+    assert(vds.type_tag == var_decls_ast);
     var_decl_t *vdp = vds.var_decls;
     while (vdp != NULL) {
 	unparseVarDecl(out, *vdp, level);
@@ -131,6 +134,7 @@ void unparseIdents(FILE *out, idents_t idents)
 void unparseProcDecls(FILE *out, proc_decls_t pds, int level)
 {
     // debug_print("unparseProcDecls entry ...\n");
+    assert(pds.type_tag == proc_decls_ast);
     proc_decl_t *pdp = pds.proc_decls;
     while (pdp != NULL) {
 	unparseProcDecl(out, *pdp, level);
@@ -160,8 +164,11 @@ static void newlineAndOptionalSemi(FILE *out, bool addSemiToEnd)
 // adding a semicolon to the end if addSemiToENd is true.
 void unparseStmt(FILE *out, stmt_t stmt, int indentLevel, bool addSemiToEnd)
 {
+    // debug_print("In unparseStmt stmt.type_tag is %d\n", stmt.type_tag);
+    assert(stmt.type_tag == stmt_ast);
     switch (stmt.stmt_kind) {
     case assign_stmt:
+	assert(stmt.data.assign_stmt.type_tag == assign_stmt_ast);
 	unparseAssignStmt(out, stmt.data.assign_stmt, indentLevel, addSemiToEnd);
 	break;
     case call_stmt:
@@ -379,7 +386,7 @@ void unparseBinOpExpr(FILE *out, binary_op_expr_t exp)
     fprintf(out, ")");
 }
 
-// Unparse the given identifier reference (i.e., identifier use), id, to out
+// Unparse the given identifer reference (i.e., identifier use), id, to out
 void unparseIdent(FILE *out, ident_t id)
 {
     fprintf(out, "%s", id.name);

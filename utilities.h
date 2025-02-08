@@ -1,12 +1,14 @@
-/* $Id: utilities.h,v 1.3 2023/11/14 03:12:19 leavens Exp $ */
+/* $Id: utilities.h,v 1.8 2023/10/19 14:10:52 leavens Exp $ */
 #ifndef _UTILITIES_H
 #define _UTILITIES_H
-#include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
 #include "file_location.h"
 
-#define MAX(x,y) (((x)>(y))?(x):(y))
+// Report a syntax error on the current line on stderr.
+// The output looks like: the filename, ":", the lexer's current line number,
+// ": ", and then msg.
+extern void yyerror(const char *filename, const char *msg);
 
 // If NDEBUG is defined, do nothing, otherwise (when debugging)
 // flush stderr and stdout, then print the message given on stderr,
@@ -25,7 +27,9 @@ extern void bail_with_error(const char *fmt, ...);
 // Then exit with a failure code, so this function does not return.
 extern void bail_with_prog_error(file_location floc, const char *fmt, ...);
 
-// print a newline on out and flush out
-extern void newline(FILE *out);
+// Call yyerror to print an error message on stderr
+// starting with the filename, ":", the lexer's current line number, ": ",
+// and then the formatted message (as in sprintf)
+extern void formatted_yyerror(const char *filename, const char *fmt, ...);
 
 #endif

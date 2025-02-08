@@ -1,4 +1,4 @@
-/* $Id: utilities.c,v 1.3 2023/11/13 05:14:06 leavens Exp $ */
+/* $Id: utilities.c,v 1.11 2023/10/19 14:10:52 leavens Exp $ */
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,10 +85,22 @@ void bail_with_prog_error(file_location floc, const char *fmt, ...)
     vbail_with_error(fmt, args);
 }
 
-    
-// print a newline on out and flush out
-void newline(FILE *out)
+#define BUF_SIZE 1024
+
+// Call yyerror to print an error message on stderr
+// starting with the filename, ":", the lexer's current line number, ": ",
+// and then the formatted message (as in sprintf)
+extern void formatted_yyerror(const char *filename, const char *fmt, ...)
 {
-    fprintf(out, "\n");
-    fflush(out);
+    fflush(stdout); // flush so output comes after what has happened already
+    // print file, line information
+    fprintf(stderr, "%s: ", filename);
+
+    char buf[BUF_SIZE];
+    va_list(args);
+    va_start(args, fmt);
+    vsnprintf(buf, BUF_SIZE, fmt, args);
+    yyerror(filename, buf);
+    va_end(args);
 }
+    

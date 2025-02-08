@@ -1,4 +1,4 @@
-/* $Id: id_attrs.c,v 1.8 2023/11/13 12:51:49 leavens Exp $ */
+/* $Id: id_attrs.c,v 1.7 2023/10/15 12:32:59 leavens Exp $ */
 // Attributes of identifiers in the symbol table
 #include <stdlib.h>
 #include <stddef.h>
@@ -10,7 +10,7 @@
 // and its offset_count set to ofst_cnt.
 // If there is no space, bail with an error message,
 // so this should never return NULL.
-id_attrs *id_attrs_create(file_location floc, id_kind k,
+extern id_attrs *create_id_attrs(file_location floc, id_kind k,
 				 unsigned int ofst_cnt)
 {
     id_attrs *ret = (id_attrs *)malloc(sizeof(id_attrs));
@@ -27,7 +27,7 @@ id_attrs *id_attrs_create(file_location floc, id_kind k,
 // (i.e. if k == variable_idk, return "variable"
 //       else if k == constant_idk, return "constant",
 //       else if k == procedure_idk, return "procedure")
-const char *id_attrs_id_kind_string(id_kind k)
+const char *kind2str(id_kind k)
 {
     static const char *kind_names[3] = {"constant", "variable", "procedure"};
     return kind_names[k];

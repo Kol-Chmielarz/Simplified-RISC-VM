@@ -1,4 +1,4 @@
-/* $Id: scope.c,v 1.5 2023/11/13 12:51:58 leavens Exp $ */
+/* $Id: scope.c,v 1.4 2023/11/01 13:25:58 leavens Exp $ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,9 +54,7 @@ static void scope_add(scope_t *s, scope_assoc_t *assoc)
     // assert(assoc != NULL);
     // assert(!scope_full());
     // assert(!scope_defined(assoc->id));
-    if (assoc->attrs->kind != procedure_idk) {
-	(assoc->attrs->offset_count) = (s->loc_count)++;
-    }
+    assoc->attrs->offset_count = (s->loc_count)++;
     s->entries[(s->size)++] = assoc;
     // fprintf(stderr, "assoc->attrs->offset_count is %d\n",
     //         assoc->attrs->offset_count);

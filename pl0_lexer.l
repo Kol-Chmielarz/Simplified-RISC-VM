@@ -1,4 +1,4 @@
-/* $Id: pl0_lexer.l,v 1.2 2023/11/13 14:08:44 leavens Exp $ */
+/* $Id: pl0_lexer.l,v 1.9 2023/10/06 10:38:47 leavens Exp $ */
 /* Lexical Analyzer for PL/0 */
 
 %option header-file = "pl0_lexer.h"
@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#include <assert.h>
 #include <limits.h>
 #include "ast.h"
 #include "parser_types.h"
@@ -36,10 +35,6 @@ extern YYSTYPE yylval;
 /* The FILE used by the generated lexer */
 extern FILE *yyin;
 
-// We are not using yyunput or input
-#define YY_NO_UNPUT
-#define YY_NO_INPUT
-
 #undef yywrap   /* sometimes a macro by default */
 
 // apparently strdup is not declared in <string.h>
@@ -49,6 +44,7 @@ extern char *strdup(const char *s);
 static void tok2ast(int code) {
     AST t;
     t.token.file_loc = file_location_make(filename, yylineno);
+    t.token.type_tag = token_ast;
     t.token.code = code;
     t.token.text = strdup(yytext);
     yylval = t;
@@ -56,8 +52,8 @@ static void tok2ast(int code) {
 
 static void ident2ast(const char *name) {
     AST t;
-    assert(filename != NULL);
     t.ident.file_loc = file_location_make(filename, yylineno);
+    t.ident.type_tag = ident_ast;
     t.ident.name = strdup(name);
     yylval = t;
 }
@@ -66,6 +62,7 @@ static void number2ast(unsigned int val)
 {
     AST t;
     t.number.file_loc = file_location_make(filename, yylineno);
+    t.number.type_tag = number_ast;
     t.number.text = strdup(yytext);
     t.number.value = val;
     yylval = t;
@@ -103,7 +100,7 @@ IGNORED         [ \t\v\f\r]
                   if (INT_MAX < lval ) {
                       char msgbuf[512];
                       if (strlen(yytext) >= 300) {
-                          snprintf(msgbuf, 327, "Number (%s...) is too large!",
+                          sprintf(msgbuf, "Number (%300s ...) is too large!",
 				  yytext);
                       } else {
                           sprintf(msgbuf, "Number (%s) is too large!", yytext);
@@ -117,7 +114,7 @@ IGNORED         [ \t\v\f\r]
 \+              { tok2ast(plussym); return plussym; }
 -               { tok2ast(minussym); return minussym; }
 \*              { tok2ast(multsym); return multsym; }
-\/              { tok2ast(divsym); return divsym; }  
+\/               { tok2ast(divsym); return divsym; }  
 
 \.              { return periodsym; }
 \;              { return semisym; }

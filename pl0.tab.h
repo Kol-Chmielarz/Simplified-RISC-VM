@@ -45,7 +45,7 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 7 "pl0.y"
+#line 8 "pl0.y"
 
 
  /* Including "ast.h" must be at the top, to define the AST type */

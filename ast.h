@@ -1,42 +1,52 @@
-/* $Id: ast.h,v 1.14 2023/11/27 04:25:24 leavens Exp $ */
+/* $Id: ast.h,v 1.19 2023/10/27 01:43:53 leavens Exp leavens $ */
 #ifndef _AST_H
 #define _AST_H
 #include <stdbool.h>
 #include "machine_types.h"
 #include "file_location.h"
 
-// forward declaration of id_use
-typedef struct id_use_s id_use;
+// types of ASTs (type tags)
+typedef enum {
+    block_ast, const_decls_ast, var_decls_ast, proc_decls_ast,
+    const_decl_ast, const_defs_ast, const_def_ast, var_decl_ast,
+    idents_ast, proc_decl_ast, stmt_ast, assign_stmt_ast, call_stmt_ast,
+    begin_stmt_ast, if_stmt_ast, while_stmt_ast, read_stmt_ast,
+    write_stmt_ast, skip_stmt_ast, stmts_ast, condition_ast,
+    rel_op_condition_ast, odd_condition_ast, expr_ast,
+    binary_op_expr_ast, token_ast, number_ast, ident_ast, empty_ast
+} AST_type;
 
 // The following types for structs named N_t
 // are returned by the parser.
 // The struct N_t is the type of information kept in the AST
 // that is related to the nonterminal N in the abstract syntax.
 
-
 // The generic struct type (generic_t) has the fields that
 // should be in all alternatives for ASTs.
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag; // says what field of the union is active
     void *next; // for lists
 } generic_t;
 
 // empty ::=
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
 } empty_t;
 
-// ident
+// label ::= ident
 typedef struct ident_s {
     file_location *file_loc;
+    AST_type type_tag;
     struct ident_s *next; // for lists
     const char *name;
-    id_use *idu;
 } ident_t;
 
 // (possibly signed) numbers
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     const char *text;
     word_type value;
 } number_t;
@@ -44,6 +54,7 @@ typedef struct {
 // tokens as ASTs
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     const char *text;
     int code;
 } token_t;
@@ -58,6 +69,7 @@ struct expr_s;
 // arithOp ::= + | - | * | /
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     struct expr_s *expr1;
     token_t arith_op;
     struct expr_s *expr2;
@@ -66,8 +78,9 @@ typedef struct {
 // expr ::= expr arithOp expr | ident | number
 typedef struct expr_s {
     file_location *file_loc;
+    AST_type type_tag;
     expr_kind_e expr_kind;
-    union expr_u {
+    union {
 	binary_op_expr_t binary;
 	ident_t ident;
 	number_t number;
@@ -79,11 +92,13 @@ typedef enum { ck_odd, ck_rel } condition_kind_e;
 
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     expr_t expr;
 } odd_condition_t;
 
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     expr_t expr1;
     token_t rel_op;
     expr_t expr2;
@@ -92,6 +107,7 @@ typedef struct {
 // condition ::= odd expr | expr relOp expr
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     condition_kind_e cond_kind;
     union {
 	odd_condition_t odd_cond;
@@ -106,37 +122,39 @@ typedef enum { assign_stmt, call_stmt, begin_stmt, if_stmt, while_stmt,
 // forward declaration of statement AST struct, for recursions
 struct stmt_s;
 
-// assignStmt ::= ident := expr
+// stmt ::= ident := expr
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     const char *name;
     struct expr_s *expr;
-    id_use *idu;
 } assign_stmt_t;
+
+// stmts ::= { stmts }
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    struct stmt_s *stmts;
+} stmts_t;
 
 // stmt ::= call ident
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     const char *name;
-    id_use *idu;
 } call_stmt_t;
 
-// stmts ::= { stmt }
+// stmt ::= begin stmts end
 typedef struct {
     file_location *file_loc;
-    struct stmt_s *stmts;
-} stmts_t;
-
-// beginStmt ::= begin varDecls stmts 
-typedef struct {
-    file_location *file_loc;
+    AST_type type_tag;
     stmts_t stmts;
 } begin_stmt_t;
 
-// IfS ::= if C S1 S2
+// stmt ::= if condition then stmt else stmt
 typedef struct {
     file_location *file_loc;
-    expr_t expr;
+    AST_type type_tag;
     condition_t condition;
     struct stmt_s *then_stmt;
     struct stmt_s *else_stmt;
@@ -145,32 +163,36 @@ typedef struct {
 // stmt ::= while condition stmt
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     condition_t condition;
     struct stmt_s *body;
 } while_stmt_t;
 
-// readStmt ::= read ident
+// stmt ::= read ident
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     const char *name;
-    id_use *idu;
 } read_stmt_t;
 
-// writeStmt ::= write expr
+// stmt ::= write expr
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     expr_t expr;
 } write_stmt_t;
 
 // stmt ::= skip
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
 } skip_stmt_t;
 
 // stmt ::= assignStmt | callStmt | beginStmt | ifStmt
 //        | whileStmt | readStmt | writeStmt | skip
 typedef struct stmt_s {
     file_location *file_loc;
+    AST_type type_tag;
     struct stmt_s *next; // for lists
     stmt_kind_e stmt_kind;
     union {
@@ -191,6 +213,7 @@ struct block_s;
 // procDecl ::= procedure ident block
 typedef struct proc_decl_s {
     file_location *file_loc;
+    AST_type type_tag;
     struct proc_decl_s *next; // for lists
     const char *name;
     struct block_s *block;
@@ -199,58 +222,67 @@ typedef struct proc_decl_s {
 // proc-decls ::= { proc-decl }
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     proc_decl_t *proc_decls;
 } proc_decls_t;
 
 // idents ::= { ident }
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     ident_t *idents;
 } idents_t;
 
 // var-decl ::= var idents
 typedef struct var_decl_s {
     file_location *file_loc;
+    AST_type type_tag;
     struct var_decl_s *next; // for lists
     idents_t idents;
 } var_decl_t;
 
-// var-decls ::= { varDecl }
+// var-decls ::= { var-decl }
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     var_decl_t *var_decls;
 } var_decls_t;
 
-// CDef ::= ident number
+// constDef ::= ident = number
 typedef struct const_def_s {
     file_location *file_loc;
+    AST_type type_tag;
     struct const_def_s *next; // for lists
     ident_t ident;
     number_t number;
 } const_def_t;
 
-// CDefs ::= { CDef }
+// const-defs ::= const-def | const-defs , const-def
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     const_def_t *const_defs;
 } const_defs_t;
 
-// CD ::= const CDefs
+// const-decl ::= const const-defs
 typedef struct const_decl_s {
     file_location *file_loc;
+    AST_type type_tag;
     struct const_decl_s *next; // for lists
     const_defs_t const_defs;
 } const_decl_t;
 
-// CDs ::= { CD }
+// const-decls ::= { const-decl }
 typedef struct {
     file_location *file_loc;
+    AST_type type_tag;
     const_decl_t *const_decls;
 } const_decls_t;
 
-// B ::= CDs VDs PDs S
+// block ::= const-decls var-decls proc-decls stmt
 typedef struct block_s {
     file_location *file_loc;
+    AST_type type_tag;
     const_decls_t const_decls;
     var_decls_t var_decls;
     proc_decls_t proc_decls;
@@ -259,7 +291,7 @@ typedef struct block_s {
 
 // program ::= block
 
-// The AST definition used by bison
+// The AST definition used by the parser generator (bison)
 typedef union AST_u {
     generic_t generic;
     block_t block;
@@ -296,9 +328,21 @@ typedef union AST_u {
 // Return the file location from an AST
 extern file_location *ast_file_loc(AST t);
 
+// Return the filename from the AST t
+extern const char *ast_filename(AST t);
+
+// Return the line number from the AST t
+extern unsigned int ast_line(AST t);
+
+// Return the type tag of the AST t
+extern AST_type ast_type_tag(AST t);
+
+// Return a pointer to a fresh copy of t
+// that has been allocated on the heap
+extern AST *ast_heap_copy(AST t);
+
 // Return an AST for a block which contains the given ASTs.
-extern block_t ast_block(const_decls_t const_decls, var_decls_t var_decls,
-			 proc_decls_t proc_decls, stmt_t stmt);
+extern block_t ast_block(const_decls_t const_decls, var_decls_t var_decls, proc_decls_t proc_decls, stmt_t stmt);
 
 // Return an AST for an empty const decls
 extern const_decls_t ast_const_decls_empty(empty_t empty);

@@ -1,4 +1,4 @@
-/* $Id: symtab.c,v 1.8 2023/11/13 14:08:44 leavens Exp $ */
+/* $Id: symtab.c,v 1.4 2023/11/01 13:20:24 leavens Exp $ */
 #include <stddef.h>
 #include "symtab.h"
 #include "scope.h"
@@ -34,8 +34,7 @@ bool symtab_empty()
     return symtab_size() == 0;
 }
 
-// Return the current scope's next location count
-// (of constants and variables).
+// Return the current scope's next location count (of variables).
 unsigned int symtab_scope_loc_count()
 {
     return scope_loc_count(symtab[symtab_top_idx]);
@@ -88,23 +87,21 @@ bool symtab_defined_in_current_scope(const char *name)
 // Put the given name, which is to be declared with kind k,
 // and has its declaration at the given file location (floc),
 // into the current scope's symbol table at the offset scope_next_offset().
-static void add_ident(scope_t *s, const char*name, id_attrs *attrs)
+static void add_ident(scope_t *s, const char *name, id_attrs *attrs)
 {
     id_attrs *old_attrs = scope_lookup(s, name);
     if (old_attrs != NULL) {
         bail_with_prog_error(attrs->file_loc,
-		      "%s \"%s\" is already declared as a %s",
-		      id_attrs_id_kind_string(attrs->kind), name,
-		      id_attrs_id_kind_string(old_attrs->kind));
+		      "symtab_insert called with an already declared variable\"%s\"!",
+		      name);
     } else {
 	scope_insert(s, name, attrs);
     }
 }
 
-// Requires: !symtab_defined(name) && attrs != NULL
-// Modify the current scope (as recorded in the symbol table) to
-// add an association from the given name to attributes appropriate
-// for k and floc.
+// Requires: symtab_defined_in_current_scope(name) && attrs != NULL.
+// If !symtab_defined_in_current_scope(name), then modify the current scope
+// to add an association from the given name to attrs.
 void symtab_insert(const char *name, id_attrs *attrs)
 {
     add_ident(symtab[symtab_top_idx], name, attrs);

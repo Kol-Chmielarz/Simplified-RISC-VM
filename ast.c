@@ -1,18 +1,40 @@
-/* $Id: ast.c,v 1.13 2023/11/27 20:13:36 leavens Exp $ */
+/* $Id: ast.c,v 1.18 2023/10/19 06:14:57 leavens Exp $ */
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
 #include "utilities.h"
 #include "ast.h"
-#include "id_use.h"
 #include "lexer.h"
-
-// apparently strdup is not declared in <string.h>
-extern char *strdup(const char *s);
 
 // Return the file location from an AST
 file_location *ast_file_loc(AST t) {
     return t.generic.file_loc;
+}
+
+// Return the filename from the AST t
+const char *ast_filename(AST t) {
+    return ast_file_loc(t)->filename;
+}
+
+// Return the line number from the AST t
+unsigned int ast_line(AST t) {
+    return ast_file_loc(t)->line;
+}
+
+// Return the type tag of the AST t
+AST_type ast_type_tag(AST t) {
+    return t.generic.type_tag;
+}
+
+// Return a pointer to a fresh copy of t
+// that has been allocated on the heap
+AST *ast_heap_copy(AST t) {
+    AST *ret = (AST *)malloc(sizeof(AST));
+    if (ret == NULL) {
+	bail_with_error("Cannot allocate an AST heap copy!");
+    }
+    *ret = t;
+    return ret;
 }
 
 // Return an AST for a block which contains the given ASTs.
@@ -21,6 +43,7 @@ block_t ast_block(const_decls_t const_decls, var_decls_t var_decls,
 {
     block_t ret;
     ret.file_loc = const_decls.file_loc;
+    ret.type_tag = block_ast;
     ret.const_decls = const_decls;
     ret.var_decls = var_decls;
     ret.proc_decls = proc_decls;
@@ -33,6 +56,7 @@ extern const_decls_t ast_const_decls_empty(empty_t empty)
 {
     const_decls_t ret;
     ret.file_loc = empty.file_loc;
+    ret.type_tag = const_decls_ast;
     ret.const_decls = NULL;
     return ret;
 }
@@ -66,6 +90,7 @@ const_decl_t ast_const_decl(const_defs_t const_defs)
 {
     const_decl_t ret;
     ret.file_loc = const_defs.file_loc;
+    ret.type_tag = const_def_ast;
     ret.const_defs = const_defs;
     ret.next = NULL;
     return ret;
@@ -76,6 +101,7 @@ extern const_defs_t ast_const_defs_singleton(const_def_t const_def)
 {
     const_defs_t ret;
     ret.file_loc = const_def.file_loc;
+    ret.type_tag = const_defs_ast;
     const_def_t *p = (const_def_t *) malloc(sizeof(const_def_t));
     if (p == NULL) {							
 	bail_with_error("Unable to allocate space for a %s!", "const_def_t"); 
@@ -113,6 +139,7 @@ const_def_t ast_const_def(ident_t ident, number_t number)
     const_def_t ret;
     ret.file_loc = file_location_copy(ident.file_loc);
     assert((ret.file_loc)->filename != NULL);
+    ret.type_tag = const_def_ast;
     ret.next = NULL;
     ret.ident = ident;
     ret.number = number;
@@ -125,6 +152,7 @@ var_decls_t ast_var_decls_empty(empty_t empty)
 {
     var_decls_t ret;
     ret.file_loc = empty.file_loc;
+    ret.type_tag = var_decls_ast;
     ret.var_decls = NULL;
     return ret;
 }
@@ -154,6 +182,7 @@ var_decl_t ast_var_decl(idents_t idents)
 {
     var_decl_t ret;
     ret.file_loc = idents.file_loc;
+    ret.type_tag = var_decl_ast;
     ret.next = NULL;
     ret.idents = idents;
     return ret;
@@ -164,6 +193,7 @@ extern idents_t ast_idents_singleton(ident_t ident)
 {
     idents_t ret;
     ret.file_loc = ident.file_loc;
+    ret.type_tag = idents_ast;
     // make a copy of ident on the heap
     ident_t *p = (ident_t *) malloc(sizeof(ident_t));	
     if (p == NULL) {							
@@ -200,6 +230,7 @@ proc_decls_t ast_proc_decls_empty(empty_t empty)
 {
     proc_decls_t ret;
     ret.file_loc = empty.file_loc;
+    ret.type_tag = proc_decls_ast;
     ret.proc_decls = NULL;
     return ret;
 }
@@ -230,6 +261,7 @@ proc_decl_t ast_proc_decl(ident_t ident, block_t block)
 {
     proc_decl_t ret;
     ret.file_loc = file_location_copy(ident.file_loc);
+    ret.type_tag = proc_decl_ast;
     ret.next = NULL;
     ret.name = ident.name;
     block_t *p = (block_t *) malloc(sizeof(block_t));
@@ -245,6 +277,7 @@ proc_decl_t ast_proc_decl(ident_t ident, block_t block)
 skip_stmt_t ast_skip_stmt(file_location *file_loc) {
     skip_stmt_t ret;
     ret.file_loc = file_loc;
+    ret.type_tag = skip_stmt_ast;
     return ret;
 }
 
@@ -252,6 +285,7 @@ skip_stmt_t ast_skip_stmt(file_location *file_loc) {
 write_stmt_t ast_write_stmt(expr_t expr) {
     write_stmt_t ret;
     ret.file_loc = expr.file_loc;
+    ret.type_tag = write_stmt_ast;
     ret.expr = expr;
     return ret;
 }
@@ -260,6 +294,7 @@ write_stmt_t ast_write_stmt(expr_t expr) {
 read_stmt_t ast_read_stmt(ident_t ident) {
     read_stmt_t ret;
     ret.file_loc = file_location_copy(ident.file_loc);
+    ret.type_tag = read_stmt_ast;
     ret.name = ident.name;
     return ret;
 }
@@ -268,6 +303,7 @@ read_stmt_t ast_read_stmt(ident_t ident) {
 while_stmt_t ast_while_stmt(condition_t condition, stmt_t body) {
     while_stmt_t ret;
     ret.file_loc = condition.file_loc;
+    ret.type_tag = while_stmt_ast;
     ret.condition = condition;
     stmt_t *p = (stmt_t *) malloc(sizeof(stmt_t));
     if (p == NULL) {
@@ -285,6 +321,7 @@ if_stmt_t ast_if_stmt(condition_t condition, stmt_t then_stmt,
 {
     if_stmt_t ret;
     ret.file_loc = condition.file_loc;
+    ret.type_tag = if_stmt_ast;
     ret.condition = condition;
     // copy then_stmt to the heap
     stmt_t *p = (stmt_t *) malloc(sizeof(stmt_t));			
@@ -309,6 +346,7 @@ begin_stmt_t ast_begin_stmt(stmts_t stmts)
 {
     begin_stmt_t ret;
     ret.file_loc = stmts.file_loc;
+    ret.type_tag = begin_stmt_ast;
     ret.stmts = stmts;
     return ret;
 }
@@ -318,6 +356,7 @@ begin_stmt_t ast_begin_stmt(stmts_t stmts)
 {
     call_stmt_t ret;
     ret.file_loc = file_location_copy(ident.file_loc);
+    ret.type_tag = call_stmt_ast;
     ret.name = ident.name;
     return ret;
 }
@@ -327,6 +366,7 @@ assign_stmt_t ast_assign_stmt(ident_t ident, expr_t expr)
 {
     assign_stmt_t ret;
     ret.file_loc = file_location_copy(ident.file_loc);
+    ret.type_tag = assign_stmt_ast;
     ret.name = ident.name;
     assert(ret.name != NULL);
     expr_t *p = (expr_t *) malloc(sizeof(expr_t));
@@ -344,6 +384,7 @@ stmts_t ast_stmts_singleton(stmt_t stmt) {
     // debug_print("Entering ast_stmts_singleton\n");
     stmts_t ret;
     ret.file_loc = stmt.file_loc;
+    ret.type_tag = stmts_ast;
     stmt.next = NULL;
     // copy stmt to the heap
     stmt_t *p = (stmt_t *) malloc(sizeof(stmt_t));	
@@ -379,6 +420,7 @@ stmt_t ast_stmt_assign(assign_stmt_t s)
 {
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.next = NULL;
     ret.stmt_kind = assign_stmt;
     ret.data.assign_stmt = s;
@@ -390,6 +432,7 @@ stmt_t ast_stmt_call(call_stmt_t s)
 {
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.next = NULL;
     ret.stmt_kind = call_stmt;
     ret.data.call_stmt = s;
@@ -401,6 +444,7 @@ stmt_t ast_stmt_begin(begin_stmt_t s)
 {
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.next = NULL;
     ret.stmt_kind = begin_stmt;
     ret.data.begin_stmt = s;
@@ -412,6 +456,7 @@ stmt_t ast_stmt_if(if_stmt_t s)
 {
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.next = NULL;
     ret.stmt_kind = if_stmt;
     ret.data.if_stmt = s;
@@ -423,6 +468,7 @@ stmt_t ast_stmt_while(while_stmt_t s)
 {
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.next = NULL;
     ret.stmt_kind = while_stmt;
     ret.data.while_stmt = s;
@@ -434,6 +480,7 @@ stmt_t ast_stmt_read(read_stmt_t s)
 {
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.next = NULL;
     ret.stmt_kind = read_stmt;
     ret.data.read_stmt = s;
@@ -446,6 +493,7 @@ stmt_t ast_stmt_write(write_stmt_t s)
     // debug_print("Entering ast_stmt_write...\n");
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.next = NULL;
     ret.stmt_kind = write_stmt;
     ret.data.write_stmt = s;
@@ -457,6 +505,7 @@ stmt_t ast_stmt_skip(skip_stmt_t s)
 {
     stmt_t ret;
     ret.file_loc = s.file_loc;
+    ret.type_tag = stmt_ast;
     ret.stmt_kind = skip_stmt;
     ret.next = NULL;
     return ret;
@@ -467,6 +516,7 @@ odd_condition_t ast_odd_condition(expr_t expr)
 {
     odd_condition_t ret;
     ret.file_loc = expr.file_loc;
+    ret.type_tag = odd_condition_ast;
     ret.expr = expr;
     return ret;
 }
@@ -477,6 +527,7 @@ rel_op_condition_t ast_rel_op_condition(expr_t expr1, token_t rel_op,
 {
     rel_op_condition_t ret;
     ret.file_loc = expr1.file_loc;
+    ret.type_tag = rel_op_condition_ast;
     ret.expr1 = expr1;
     ret.rel_op = rel_op;
     ret.expr2 = expr2;
@@ -488,6 +539,7 @@ condition_t ast_condition_odd(odd_condition_t odd_cond)
 {
     condition_t ret;
     ret.file_loc = odd_cond.file_loc;
+    ret.type_tag = condition_ast;
     ret.cond_kind = ck_odd;
     ret.data.odd_cond = odd_cond;
     return ret;
@@ -498,6 +550,7 @@ condition_t ast_condition_rel(rel_op_condition_t rel_op_cond)
 {
     condition_t ret;
     ret.file_loc = rel_op_cond.file_loc;
+    ret.type_tag = condition_ast;
     ret.cond_kind = ck_rel;
     ret.data.rel_op_cond = rel_op_cond;
     return ret;
@@ -509,6 +562,7 @@ binary_op_expr_t ast_binary_op_expr(expr_t expr1, token_t arith_op,
 {
     binary_op_expr_t ret;
     ret.file_loc = expr1.file_loc;
+    ret.type_tag = binary_op_expr_ast;
 
     expr_t *p = (expr_t *) malloc(sizeof(expr_t));
     if (p == NULL) {
@@ -534,6 +588,7 @@ expr_t ast_expr_binary_op(binary_op_expr_t e)
 {
     expr_t ret;
     ret.file_loc = e.file_loc;
+    ret.type_tag = expr_ast;
     ret.expr_kind = expr_bin;
     ret.data.binary = e;
     return ret;
@@ -542,15 +597,11 @@ expr_t ast_expr_binary_op(binary_op_expr_t e)
 // Return an expression AST for an signed number
 expr_t ast_expr_negated_number(token_t sign, number_t number)
 {
-    char buf[BUFSIZ];
     expr_t ret;
     ret.file_loc = file_location_copy(sign.file_loc);
+    ret.type_tag = expr_ast;
     ret.expr_kind = expr_number;
     ret.data.number = number;
-    // add the minus sign to the text, so it gets in the literal table properly
-    strcat(buf, "-");
-    strncat(buf, number.text, BUFSIZ-1);
-    ret.data.number.text = strdup(buf);
     // negate the value
     ret.data.number.value = - ret.data.number.value;
     return ret;
@@ -561,6 +612,7 @@ expr_t ast_expr_pos_number(token_t sign, number_t number)
 {
     expr_t ret;
     ret.file_loc = file_location_copy(sign.file_loc);
+    ret.type_tag = expr_ast;
     ret.expr_kind = expr_number;
     ret.data.number = number;
     return ret;
@@ -571,6 +623,7 @@ token_t ast_token(file_location *file_loc, const char *text, int code)
 {
     token_t ret;
     ret.file_loc = file_loc;
+    ret.type_tag = token_ast;
     ret.text = text;
     ret.code = code;
     return ret;
@@ -581,6 +634,7 @@ number_t ast_number(token_t sgn, word_type value)
 {
     number_t ret;
     ret.file_loc = file_location_copy(sgn.file_loc);
+    ret.type_tag = number_ast;
     ret.value = value;
     return ret;
 }
@@ -590,6 +644,7 @@ ident_t ast_ident(file_location *file_loc, const char *name)
 {
     ident_t ret;
     ret.file_loc = file_loc;
+    ret.type_tag = ident_ast;
     ret.name = name;
     return ret;
 }
@@ -599,6 +654,7 @@ expr_t ast_expr_binary_op_expr(binary_op_expr_t e)
 {
     expr_t ret;
     ret.file_loc = e.file_loc;
+    ret.type_tag = binary_op_expr_ast;
     ret.expr_kind = expr_bin;
     ret.data.binary = e;
     return ret;
@@ -609,6 +665,7 @@ expr_t ast_expr_ident(ident_t e)
 {
     expr_t ret;
     ret.file_loc = e.file_loc;
+    ret.type_tag = expr_ast;
     ret.expr_kind = expr_ident;
     ret.data.ident = e;
     return ret;
@@ -619,6 +676,7 @@ expr_t ast_expr_number(number_t e)
 {
     expr_t ret;
     ret.file_loc = e.file_loc;
+    ret.type_tag = expr_ast;
     ret.expr_kind = expr_number;
     ret.data.number = e;
     return ret;
@@ -629,6 +687,7 @@ empty_t ast_empty(file_location *file_loc)
 {
     empty_t ret;
     ret.file_loc = file_loc;
+    ret.type_tag = empty_ast;
     return ret;
 }
 

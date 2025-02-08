@@ -1,4 +1,4 @@
-/* $Id: symtab.h,v 1.5 2023/11/13 12:52:01 leavens Exp $ */
+/* $Id: symtab.h,v 1.4 2023/11/01 13:20:24 leavens Exp $ */
 #ifndef _SYMTAB_H
 #define _SYMTAB_H
 
@@ -17,8 +17,7 @@ extern unsigned int symtab_size();
 // Does this symbol table have any scopes in it?
 extern bool symtab_empty();
 
-// Return the current scope's next location count
-// (of constants and variables).
+// Return the current scope's next location count (of variables).
 extern unsigned int symtab_scope_loc_count();
 
 // Return the current scope's size (the number of declared ids).
@@ -46,7 +45,7 @@ extern bool symtab_defined_in_current_scope(const char *name);
 
 // Requires: !symtab_defined_in_current_scope(name) && attrs != NULL
 // Modify the current scope (as recorded in the symbol table) to
-// add an association from the given name to the given attributes attrs.
+// add an association from the given name to the given attributes, attrs.
 extern void symtab_insert(const char *name, id_attrs *attrs);
 
 // Requires: !symtab_full()
