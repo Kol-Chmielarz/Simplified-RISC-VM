@@ -1,4 +1,4 @@
-/* $Id: pl0_lexer.l,v 1.9 2023/10/06 10:38:47 leavens Exp $ */
+/* $Id: pl0_lexer_definitions_top.l,v 1.2 2023/10/06 11:12:37 leavens Exp leavens $ */
 /* Lexical Analyzer for PL/0 */
 
 %option header-file = "pl0_lexer.h"
@@ -72,86 +72,65 @@ static void number2ast(unsigned int val)
 
  /* you can add actual definitions below */
 
-DIGIT	[0-9]
-NUMBER          {DIGIT}+
-LETTER		[_a-zA-Z]
-LETTERORDIGIT	({LETTER}|{DIGIT})
-IDENT		{LETTER}({LETTERORDIGIT}*)
-NEWLINE         \n
-CR              \r
-EOL             ({NEWLINE}|({CR}{NEWLINE}))
-COMMENTSTART    #
-COMMENT         {COMMENTSTART}.*
-IGNORED         [ \t\v\f\r]
+ /* the rules section starts after the %% below */
 
 %%
 
-{IGNORED}       { ; } /* do nothing */
-{COMMENT}       { ; } /* ignore comments */
-{EOL}           { ; } /* ignore EOL */
-
-{NUMBER}        { unsigned long lval;
-                  int ssf_ret;
-                  ssf_ret = sscanf(yytext, "%lu", &lval);
-                  if (ssf_ret != 1) {
-                      bail_with_error("Number (%s) couldn't be read by lexer!",
-				      yytext);
-                  }
-                  if (INT_MAX < lval ) {
-                      char msgbuf[512];
-                      if (strlen(yytext) >= 300) {
-                          sprintf(msgbuf, "Number (%300s ...) is too large!",
-				  yytext);
-                      } else {
-                          sprintf(msgbuf, "Number (%s) is too large!", yytext);
-                      }
-                      yyerror(lexer_filename(), msgbuf);
-                  }
-                  number2ast((int) lval);
-                  return numbersym; 
+"if"            { return ifsym; }
+"else"          { return elsesym; }
+"while"         { return whilesym; }
+"do"            { return dosym; }
+"read"          { return readsym; }
+"write"         { return writesym; }
+"skip"          { return skipsym; }
+"odd"           { return oddsym; }
+"const"         { return constsym; }
+"var"           { return varsym; }
+"procedure"     { return proceduresym; }
+"call"          { return callsym; }
+"begin"         { return beginsym; }
+"end"           { return endsym; }
+"then"          { return thensym; }
+";"             { return semisym; }
+"."             { return periodsym; }
+","             { return commasym; }
+"("             { return lparensym; }
+")"             { return rparensym; }
+"+"             { return plussym; }
+"-"             { return minussym; }
+"*"             { return multsym; }
+"/"             { return divsym; }
+"="             { return eqsym; }
+":="            { return becomessym; }
+"<>"            { return neqsym; }
+"<"             { return ltsym; }
+"<="            { return leqsym; }
+">"             { return gtsym; }
+">="            { return geqsym; }
+[ \t\n]+        { /* ignore whitespace */ }
+#.*             { /* ignore comments */ }
+[0-9]+          {
+                    unsigned long long num = strtoull(yytext, NULL, 10); 
+                    number2ast(num);
+                    if (INT_MAX > num)
+                    {
+                        return numbersym;
+                    }
+                    printf("%s:%d: Number (%s) is too large!\n%d    %d    \"%s\"\n",  lexer_filename(), lexer_line(), yytext, numbersym, lexer_line(), yytext);
+                }
+[a-zA-Z_][a-zA-Z0-9_]* {ident2ast(yytext); return identsym; }
+.               {
+                printf("%s:%d: invalid character: '%c' ('\\%03o')\n",filename, yylineno, yytext[0], yytext[0]);
                 }
 
-\+              { tok2ast(plussym); return plussym; }
--               { tok2ast(minussym); return minussym; }
-\*              { tok2ast(multsym); return multsym; }
-\/               { tok2ast(divsym); return divsym; }  
+ /* fill in the rules for your lexer here! */
 
-\.              { return periodsym; }
-\;              { return semisym; }
-,               { return commasym; }
-:=              { return becomessym; }
-=               { tok2ast(eqsym); return eqsym; }
-\<>             { tok2ast(neqsym); return neqsym; }
-\<=             { tok2ast(leqsym); return leqsym; }
-\>=             { tok2ast(geqsym); return geqsym; }
-\>              { tok2ast(gtsym); return gtsym; }
-\<              { tok2ast(ltsym); return ltsym; }
-\(              { tok2ast(lparensym); return lparensym; }
-\)              { tok2ast(rparensym); return rparensym; }
+ /* $Id: pl0_lexer_user_code.c,v 1.3 2023/10/06 11:12:37 leavens Exp leavens $ */
 
-const           { tok2ast(constsym); return constsym; }
-var             { tok2ast(varsym); return varsym; }
-procedure       { tok2ast(proceduresym); return proceduresym; }
-call            { tok2ast(callsym); return callsym; }
-begin           { tok2ast(beginsym); return beginsym; }
-end             { tok2ast(endsym); return endsym; }
-if              { tok2ast(ifsym); return ifsym; }
-then            { tok2ast(thensym); return thensym; }
-else            { tok2ast(elsesym); return elsesym; }
-while           { tok2ast(whilesym); return whilesym; }
-do              { tok2ast(dosym); return dosym; }
-read            { tok2ast(readsym); return readsym; }
-write           { tok2ast(writesym); return writesym; }
-skip            { tok2ast(skipsym); return skipsym; }
-odd             { tok2ast(oddsym); return oddsym; }
+%% 
 
-{IDENT}         { ident2ast(yytext); return identsym; }
-
-.   { char msgbuf[512];
-      sprintf(msgbuf, "invalid character: '%c' ('\\0%o')", *yytext, *yytext);
-      yyerror(lexer_filename(), msgbuf);
-    }
-%%
+/* This code goes in the user code section of the pl0_lexer.l file,
+   following the last %% above. */
 
 // Requires: fname != NULL
 // Requires: fname is the name of a readable file

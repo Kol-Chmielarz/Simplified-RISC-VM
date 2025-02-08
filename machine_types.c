@@ -1,4 +1,4 @@
-// $Id: machine_types.c,v 1.2 2023/09/21 18:48:31 leavens Exp $
+// $Id: machine_types.c,v 1.1 2023/10/04 03:43:15 leavens Exp $
 #include "machine_types.h"
 
 // Return the sign extended equivalent of i

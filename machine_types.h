@@ -1,4 +1,4 @@
-// $Id: machine_types.h,v 1.8 2023/09/18 02:24:31 leavens Exp $
+// $Id: machine_types.h,v 1.1 2023/10/04 03:43:15 leavens Exp $
 // Machine Types for the Simplified Risc Machine (SRM)
 #ifndef _MACHINE_TYPES_H
 #define _MACHINE_TYPES_H

@@ -45,7 +45,7 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 8 "pl0.y"
+#line 7 "pl0.y"
 
 
  /* Including "ast.h" must be at the top, to define the AST type */
@@ -121,7 +121,6 @@ struct YYLTYPE
 # define YYLTYPE_IS_DECLARED 1
 # define YYLTYPE_IS_TRIVIAL 1
 #endif
-
 
 extern YYSTYPE yylval;
 extern YYLTYPE yylloc;

@@ -1,31 +1,28 @@
-/* $Id: ast.h,v 1.20 2023/09/17 20:47:27 leavens Exp $ */
+/* $Id: ast.h,v 1.11 2023/10/05 04:22:00 leavens Exp $ */
 #ifndef _AST_H
 #define _AST_H
 #include <stdbool.h>
 #include "machine_types.h"
 #include "file_location.h"
-#include "instruction.h"
 
 // types of ASTs (type tags)
 typedef enum {
-    program_ast, text_section_ast, lora_ast, asm_instr_ast,
-    asm_instrs_ast, label_opt_ast, empty_ast, instr_ast,
-    data_section_ast, data_size_ast,
-    static_decls_ast, static_decl_ast, initializer_ast,
-    stack_section_ast, ident_ast, number_ast, unsignednum_ast,
-    reg_ast, token_ast
+    block_ast, const_decls_ast, var_decls_ast, proc_decls_ast,
+    const_decl_ast, const_defs_ast, const_def_ast, var_decl_ast,
+    idents_ast, proc_decl_ast, stmt_ast, assign_stmt_ast, call_stmt_ast,
+    begin_stmt_ast, if_stmt_ast, while_stmt_ast, read_stmt_ast,
+    write_stmt_ast, skip_stmt_ast, stmts_ast, condition_ast,
+    rel_op_condition_ast, odd_condition_ast, expr_ast,
+    binary_op_expr_ast, token_ast, number_ast, ident_ast, empty_ast
 } AST_type;
 
-// forward declaration, so can use the type AST* below
-typedef union AST_u AST;
-
 // The following types for structs named N_t
-// are used in the declaration of the AST_u union below.
+// are returned by the parser.
 // The struct N_t is the type of information kept in the AST
 // that is related to the nonterminal N in the abstract syntax.
 
 // The generic struct type (generic_t) has the fields that
-// should be in all alternatives of the union AST_u
+// should be in all alternatives for ASTs.
 typedef struct {
     file_location *file_loc;
     AST_type type_tag; // says what field of the union is active
@@ -39,42 +36,20 @@ typedef struct {
 } empty_t;
 
 // label ::= ident
-typedef struct {
+typedef struct ident_s {
     file_location *file_loc;
     AST_type type_tag;
+    struct ident_s *next; // for lists
     const char *name;
 } ident_t;
 
-// (signed) numbers (and offsets)
+// (possibly signed) numbers
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
+    const char *text;
     word_type value;
 } number_t;
-
-// unsigned numbers
-typedef struct {
-    file_location *file_loc;
-    AST_type type_tag;
-    const char *text;
-    unsigned int value;
-} unsignednum_t;
-
-// registers
-typedef struct {
-    file_location *file_loc;
-    AST_type type_tag;
-    const char *text;
-    unsigned short number;
-} reg_t;
-
-// dataSize ::= WORD
-typedef struct {
-    file_location *file_loc;
-    AST_type type_tag;
-    unsigned short size_in_bytes;
-    const char *size_name;
-} data_size_t;
 
 // tokens as ASTs
 typedef struct {
@@ -84,156 +59,274 @@ typedef struct {
     int code;
 } token_t;
 
+// kinds of expressions
+typedef enum { expr_bin, expr_ident, expr_number } expr_kind_e;
 
-// label-opt ::= label | empty
+// forward declaration for expressions
+struct expr_s;
+
+// expr ::= expr arithOp expr
+// arithOp ::= + | - | * | /
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    const char *name;  // NULL if there was no label
-} label_opt_t;
-
-// lora ::= label | unsigned-number
-typedef struct {
+    struct expr_s *expr1;
+    token_t arith_op;
+    struct expr_s *expr2;
+} binary_op_expr_t;
+    
+// expr ::= expr arithOp expr | ident | number
+typedef struct expr_s {
     file_location *file_loc;
     AST_type type_tag;
-    bool address_defined;
-    const char *label; // NULL if address_defined
-    address_type addr; // 0 if !address_defined
-} lora_t;
-
-// kinds of immediate data
-typedef enum { id_number, id_unsigned, id_lora, id_syscall_code, id_empty
-} immed_data_kind_t;
-
-// immed-data ::= number | unsignednum | lora | empty
-typedef struct {
-    immed_data_kind_t id_data_kind;
+    expr_kind_e expr_kind;
     union {
-	int immed;
-	unsigned int uimmed;
-	lora_t lora;
-	syscall_type syscall_code;
-	int none;
-    } data;
-} immedData_t;
+	binary_op_expr_t binary;
+	ident_t ident;
+	number_t number;
+    } expr;
+} expr_t;
 
-// kinds of immediate operands
-typedef enum {ik_immed, ik_uimmed, ik_offset, ik_syscall_code, ik_none
-} immed_kind_t;
+// kinds of conditions
+typedef enum { ck_odd, ck_rel } condition_kind_e;
 
-// instr ::= three-reg-instr | two-reg-instr | shift-instr | one-reg-instr
-//         | immed-arith-instr | immed-bool-instr | branch-test-instr
-//         | load-store-instr | jump-instr
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    instr_type itype;
-    const char *opname;
-    int opcode;
-    func_type func; // function code for register instructions
-    unsigned short regs_used;
-    unsigned short regs[3];
-    immed_kind_t immed_kind;
-    immedData_t immed_data;
-} instr_t;
+    expr_t expr;
+} odd_condition_t;
 
-// asmInstr ::= label-opt instr
-typedef struct asm_instr_s {
-    file_location *file_loc;
-    AST_type type_tag;
-    struct asm_instr_s *next;  // for lists
-    label_opt_t label_opt;
-    instr_t instr;
-} asm_instr_t;
-
-// asmInstrs ::= asmInstr asmInstr*
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    asm_instr_t *instrs;
-} asm_instrs_t;
+    expr_t expr1;
+    token_t rel_op;
+    expr_t expr2;
+} rel_op_condition_t;
 
-// initializer-opt ::= initializer | empty
-// initializer ::= = number
+// condition ::= odd expr | expr relOp expr
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    word_type number;
-} initializer_t;
+    condition_kind_e cond_kind;
+    union {
+	odd_condition_t odd_cond;
+	rel_op_condition_t rel_op_cond;
+    } condition;
+} condition_t;
 
-// staticDecl ::= dataSize ident initializer-opt
-typedef struct static_decl_s {
-    file_location *file_loc;
-    AST_type type_tag;
-    struct static_decl_s *next;  // for lists
-    unsigned short size_in_bytes;
-    const char *size_name;
-    ident_t ident;
-    initializer_t initializer;
-} static_decl_t;
+// kinds of statements
+typedef enum { assign_stmt, call_stmt, begin_stmt, if_stmt, while_stmt,
+	       read_stmt, write_stmt, skip_stmt } stmt_kind_e;
 
-// staticDecls ::= staticDecl*
+// forward declaration of statement AST struct, for recursions
+struct stmt_s;
+
+// stmts ::= { stmt }
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    static_decl_t *decls;
-} static_decls_t;
+    struct stmt_s *stmts;
+} stmts_t;
 
-// text-section ::= entry-point asmInstr*
+// stmt ::= ident := expr
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    lora_t entryPoint;
-    asm_instrs_t instrs;
-} text_section_t;
+    const char *name;
+    struct expr_s *expr;
+} assign_stmt_t;
 
-// data-section ::= static-decl*
+// stmt ::= call ident
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    address_type static_start_addr;
-    static_decls_t staticDecls;
-} data_section_t;
+    const char *name;
+} call_stmt_t;
 
-// stack-section ::= .stack stack-bottom-addr
+// stmt ::= begin { stmt } end
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    address_type stack_bottom_addr;
-} stack_section_t;
+    stmts_t stmts;
+} begin_stmt_t;
 
-// program ::= text-section data-section
+// stmt ::= if condition then stmt else stmt
 typedef struct {
     file_location *file_loc;
     AST_type type_tag;
-    text_section_t textSection;
-    data_section_t dataSection;
-    stack_section_t stackSection;
-} program_t;
+    condition_t condition;
+    struct stmt_s *then_stmt;
+    struct stmt_s *else_stmt;
+} if_stmt_t;
 
-// The actual AST definition:
-typedef union AST_u {
-    generic_t generic;
-    program_t program;
-    text_section_t text_section;
-    lora_t lora;
-    asm_instrs_t asm_instrs;
-    asm_instr_t asm_instr;
-    label_opt_t label_opt;
-    empty_t empty;
-    instr_t instr;
-    data_section_t data_section;
-    static_decls_t static_decls;
-    static_decl_t static_decl;
-    data_size_t data_size;
-    initializer_t initializer;
-    stack_section_t stack_section;
+// stmt ::= whhile condition stmt
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    condition_t condition;
+    struct stmt_s *body;
+} while_stmt_t;
+
+// stmt ::= read ident
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    const char *name;
+} read_stmt_t;
+
+// stmt ::= write expr
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    expr_t expr;
+} write_stmt_t;
+
+// stmt ::= skip
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+} skip_stmt_t;
+
+// stmt ::= assignStmt | callStmt | beginStmt | ifStmt
+//        | whileStmt | readStmt | writeStmt | skip
+typedef struct stmt_s {
+    file_location *file_loc;
+    AST_type type_tag;
+    struct stmt_s *next; // for lists
+    stmt_kind_e stmt_kind;
+    union {
+	assign_stmt_t assign_stmt;
+	call_stmt_t call_stmt;
+	begin_stmt_t begin_stmt;
+	if_stmt_t if_stmt;
+	while_stmt_t while_stmt;
+	read_stmt_t read_stmt;
+	write_stmt_t write_stmt;
+	skip_stmt_t skip_stmt;
+    } stmt;
+} stmt_t;
+
+// A forward declaration for blocks
+struct block_s;
+
+// procDecl ::= procedure ident block
+typedef struct proc_decl_s {
+    file_location *file_loc;
+    AST_type type_tag;
+    struct proc_decl_s *next; // for lists
+    const char *name;
+    struct block_s *block;
+} proc_decl_t;
+
+// proc-decls ::= { proc-decl }
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    proc_decl_t *proc_decls;
+} proc_decls_t;
+
+// idents ::= { ident }
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    ident_t *idents;
+} idents_t;
+
+// var-decl ::= var idents
+typedef struct var_decl_s {
+    file_location *file_loc;
+    AST_type type_tag;
+    struct var_decl_s *next; // for lists
+    idents_t idents;
+} var_decl_t;
+
+// var-decls ::= { var-decl }
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    var_decl_t *var_decls;
+} var_decls_t;
+
+// constDef ::= ident = number
+typedef struct const_def_s {
+    file_location *file_loc;
+    AST_type type_tag;
+    struct const_def_s *next; // for lists
     ident_t ident;
     number_t number;
-    unsignednum_t unsignednum;
-    reg_t reg;
+} const_def_t;
+
+// const-defs ::= const-def | const-defs , const-def
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    const_def_t *const_defs;
+} const_defs_t;
+
+// const-decl ::= const const-defs
+typedef struct const_decl_s {
+    file_location *file_loc;
+    AST_type type_tag;
+    struct const_decl_s *next; // for lists
+    const_defs_t const_defs;
+} const_decl_t;
+
+// const-decls ::= { const-decl }
+typedef struct {
+    file_location *file_loc;
+    AST_type type_tag;
+    const_decl_t *const_decls;
+} const_decls_t;
+
+// block ::= const-decls var-decls proc-decls stmt
+typedef struct block_s {
+    file_location *file_loc;
+    AST_type type_tag;
+    const_decls_t const_decls;
+    var_decls_t var_decls;
+    proc_decls_t proc_decls;
+    stmt_t stmt;
+} block_t;
+
+// program ::= block
+
+// The AST definition used by the parser generator (bison)
+typedef union AST_u {
+    generic_t generic;
+    block_t block;
+    const_decls_t const_decls;
+    const_decl_t const_decl;
+    const_defs_t const_defs;
+    const_def_t const_def;
+    var_decls_t var_decls;
+    var_decl_t var_decl;
+    idents_t idents;
+    proc_decls_t proc_decls;
+    proc_decl_t proc_decl;
+    stmt_t stmt;
+    assign_stmt_t assign_stmt;
+    call_stmt_t call_stmt;
+    begin_stmt_t begin_stmt;
+    if_stmt_t if_stmt;
+    while_stmt_t while_stmt;
+    read_stmt_t read_stmt;
+    write_stmt_t write_stmt;
+    skip_stmt_t skip_stmt;
+    stmts_t stmts;
+    condition_t condition;
+    rel_op_condition_t rel_op_condition;
+    odd_condition_t odd_condition;
+    expr_t expr;
+    binary_op_expr_t binary_op_expr;
     token_t token;
+    number_t number;
+    ident_t ident;
+    empty_t empty;
 } AST;
+
+// Return the file location from an AST
+extern file_location *ast_file_loc(AST t);
 
 // Return the filename from the AST t
 extern const char *ast_filename(AST t);
@@ -246,113 +339,154 @@ extern AST_type ast_type_tag(AST t);
 
 // Return a pointer to a fresh copy of t
 // that has been allocated on the heap
-AST *ast_heap_copy(AST t);
+extern AST *ast_heap_copy(AST t);
 
-// Return an AST for a program,
-// which contains the given ASTs.
-extern program_t ast_program(text_section_t textSec, data_section_t dataSec,
-			     stack_section_t stackSec);
+// Return an AST for a block which contains the given ASTs.
+extern block_t ast_block(const_decls_t const_decls, var_decls_t var_decls, proc_decls_t proc_decls, stmt_t stmt);
 
-// Return an AST for the text section
-// with the given entry point and instructions.
-extern text_section_t ast_text_section(token_t tok, lora_t entryPoint,
-				       asm_instrs_t instrs);
+// Return an AST for an empty const decls
+extern const_decls_t ast_const_decls_empty(empty_t empty);
 
-// Return an AST for an entry point
-// that represents the label given
-extern lora_t ast_lora_label(ident_t label);
+// Return an AST for the const decls
+extern const_decls_t ast_const_decls(const_decls_t const_decls,
+				     const_decl_t const_decl);
 
-// Return an AST for an entry point
-// that represents the address given
-extern lora_t ast_lora_addr(unsignednum_t addr);
+// Return an AST for a const_decl
+extern const_decl_t ast_const_decl(const_defs_t const_defs);
 
-// Return an AST for an asm instr AST
-// with the given label and instruction
-extern asm_instr_t ast_asm_instr(label_opt_t label, instr_t instr);
+// Return an AST for const_defs
+extern const_defs_t ast_const_defs_singleton(const_def_t const_def);
 
-// Return an AST for a singleton asm instrs AST
-// with the given instruction
-extern asm_instrs_t ast_asm_instrs_singleton(asm_instr_t asminstr);
+// Return an AST for const_defs
+extern const_defs_t ast_const_defs(const_defs_t const_defs,
+				   const_def_t const_def);
 
-// Return an AST made from adding the given asm instr to the end of lst
-extern asm_instrs_t ast_asm_instrs_add(asm_instrs_t lst, asm_instr_t asminstr);
+// Return an AST for a const-def
+extern const_def_t ast_const_def(ident_t ident, number_t number);
 
-// Return an AST for a label_opt AST
-// with the given identifier
-extern label_opt_t ast_label_opt_label(ident_t id);
+// Return an AST for varDecls that are empty
+extern var_decls_t ast_var_decls_empty(empty_t empty);
 
-// Return an AST for a label_opt AST
-// with the empty AST (t)
-extern label_opt_t ast_label_opt_empty(empty_t t);
+// Return an AST varDecls that have a var_decl
+extern var_decls_t ast_var_decls(var_decls_t var_decls, var_decl_t var_decl);
 
-// Return an immediate data holding an int
-extern immedData_t ast_immed_number(int n);
+// Return an AST for a var_decl
+extern var_decl_t ast_var_decl(idents_t idents);
 
-// Return an immediate data holding an unsigned int
-extern immedData_t ast_immed_unsigned(unsigned int u);
+// Return an AST made for one ident
+extern idents_t ast_idents_singleton(ident_t ident);
 
-// Return an immediate data holding an label or address
-extern immedData_t ast_immed_lora(lora_t a);
+// Return an AST made for idents
+extern idents_t ast_idents(idents_t idents, ident_t ident);
 
-// Return an immediate data that is nothing
-extern immedData_t ast_immed_none();
+// Return an AST for proc_decls
+extern proc_decls_t ast_proc_decls_empty(empty_t empty);
+
+// Return an AST for proc_decls
+extern proc_decls_t ast_proc_decls(proc_decls_t proc_decls,
+				   proc_decl_t proc_decl);
+
+// Return an AST for a proc_decl
+extern proc_decl_t ast_proc_decl(ident_t ident, block_t block);
+
+// Return an AST for a skip statement
+extern skip_stmt_t ast_skip_stmt(file_location *file_loc); 
+
+// Return an AST for a write statement
+extern write_stmt_t ast_write_stmt(expr_t expr); 
+
+// Return an AST for a read statement
+extern read_stmt_t ast_read_stmt(ident_t ident); 
+
+// Return an immediate data holding an address
+extern while_stmt_t ast_while_stmt(condition_t condition, stmt_t body);
 
 // Return an AST for an instruction
 // with the given information
-extern instr_t ast_instr(token_t op, instr_type itype,
-			 unsigned short num_regs_used,
-			 unsigned short reg1, unsigned short reg2,
-			 unsigned short reg3, func_type func,
-			 immed_kind_t ik, immedData_t im);
+extern if_stmt_t ast_if_stmt(condition_t condition, stmt_t then_stmt,
+			     stmt_t else_stmt);
 
-// Return an AST for the data section AST
-// with the given list of static declarations.
-extern data_section_t ast_data_section(token_t kw, unsigned int static_start, static_decls_t staticDecls);
+// Return an AST for a begin statement
+// containing the given list of statements
+extern begin_stmt_t ast_begin_stmt(stmts_t stmts);
 
-// Return an AST for an empty list of static declarations
-extern static_decls_t ast_static_decls_empty(empty_t e);
+// Return an AST for a call statment
+extern call_stmt_t ast_call_stmt(ident_t ident);
 
-// Return an AST for a list of static declarations
-// with sd added to the end of sds
-extern static_decls_t ast_static_decls_add(static_decls_t sds,
-					   static_decl_t sd);
+// Return an AST for an assignment statement
+extern assign_stmt_t ast_assign_stmt(ident_t ident, expr_t expr);
 
-// Return an AST for a data size delclarator
-// for the given number of bytes
-extern data_size_t ast_data_size(token_t kw, unsigned short bytes);
+// Return an AST for the list of statements 
+extern stmts_t ast_stmts_singleton(stmt_t stmt);
 
-// Return an AST for a static declaration
-// found in the file named fn, on line ln, with the given data size,
-// identifier, and initializer.
-extern static_decl_t ast_static_decl(data_size_t ds,
-				     ident_t ident,
-				     initializer_t initializer);
+// Return an AST for the list of statements 
+extern stmts_t ast_stmts(stmts_t stmts, stmt_t stmt);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_assign(assign_stmt_t s);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_call(call_stmt_t s);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_begin(begin_stmt_t s);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_if(if_stmt_t s);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_while(while_stmt_t s);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_read(read_stmt_t s);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_write(write_stmt_t s);
+
+// Return an AST for the given statment
+extern stmt_t ast_stmt_skip(skip_stmt_t s);
+
+// Return an AST for an odd condition
+extern odd_condition_t ast_odd_condition(expr_t expr);
 
 // Return an AST for an initializer with the given value
-extern initializer_t ast_initializer_given(token_t eqs, word_type value);
+extern rel_op_condition_t ast_rel_op_condition(expr_t expr1, token_t rel_op,
+					       expr_t expr2);
 
-// Return an AST for an empty initializer 
-extern initializer_t ast_initializer_empty(empty_t e);
+// Return an AST for an odd condition
+extern condition_t ast_condition_odd(odd_condition_t odd_cond);
 
-// Return an AST for a stack section AST
-// with the given keyword and stack bottom address.
-extern stack_section_t ast_stack_section(token_t kw, unsigned int stack_bottom);
+// Return an AST for a relational condition
+extern condition_t ast_condition_rel(rel_op_condition_t rel_op_cond);
 
-// Return an AST for empty found in the file named fn, on line ln
-extern empty_t ast_empty(const char *fn, unsigned int ln);
+// Return an AST for a binary op expression
+extern binary_op_expr_t ast_binary_op_expr(expr_t expr1, token_t arith_op,
+					   expr_t expr2);
 
+// Return an expression AST for a binary operation expresion
+extern expr_t ast_expr_binary_op(binary_op_expr_t e);
+
+// Return an expression AST for an identifier
+extern expr_t ast_expr_ident(ident_t e);
+
+// Return an expression AST for a negated number
+extern expr_t ast_expr_negated_number(token_t sign, number_t number);
+
+// Return an expression AST for a positive number
+extern expr_t ast_expr_pos_number(token_t sign, number_t number);
+
+// Return an AST for the given token
+extern token_t ast_token(file_location *file_loc, const char *text, int code);
+
+// Return an AST for an identifier
 // found in the file named fn, on line ln, with the given name.
-extern ident_t ast_ident(const char *fn, unsigned int ln, const char *name);
+extern ident_t ast_ident(file_location *file_loc, const char *name);
 
 // Return an AST for a (signed) number with the given value
 extern number_t ast_number(token_t sgn, word_type value);
 
-// Return an AST for a (signed) number with the given value
-extern unsignednum_t ast_unsigned_number(const char *fn, unsigned int ln,
-					 unsigned int value);
-
-// Return an AST for a token
-extern token_t ast_token(const char *fn, unsigned int ln, int token_code);
+// Return an AST for empty found in the given file location
+empty_t ast_empty(file_location *file_loc);
 
 // Requires: lst is a pointer to a non-circular 
 //           linked list with next pointers
